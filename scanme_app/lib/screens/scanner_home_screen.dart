@@ -1,38 +1,48 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
-class ScannerHomeScreen extends StatelessWidget {
+class ScannerHomeScreen extends StatefulWidget {
   const ScannerHomeScreen({super.key});
+
+  @override
+  State<ScannerHomeScreen> createState() => _ScannerHomeScreenState();
+}
+
+class _ScannerHomeScreenState extends State<ScannerHomeScreen> {
+  // MobileScannerController controller = MobileScannerController();
+  bool _isScanning = true;
+
+  void _onDetect(BarcodeCapture capture) {
+    if (!_isScanning) return;
+    
+    final List<Barcode> barcodes = capture.barcodes;
+    for (final barcode in barcodes) {
+      if (barcode.rawValue != null) {
+        setState(() {
+          _isScanning = false;
+        });
+        
+        // Vibrate or sound could go here
+        
+        context.push('/result', extra: barcode.rawValue);
+        break; 
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black, // Camera feel
+      backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Mock Camera Preview
-          Container(
-            width: double.infinity,
-            height: double.infinity,
-            color: Colors.grey[900],
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.camera_alt,
-                    color: Colors.white.withValues(alpha: 0.3),
-                    size: 64,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Camera Preview',
-                    style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
-                  ),
-                ],
-              ),
-            ),
+          // Live Camera
+          MobileScanner(
+            onDetect: _onDetect,
+            fit: BoxFit.cover,
+             // controller: controller,
           ),
           
           // Overlay
@@ -45,9 +55,11 @@ class ScannerHomeScreen extends StatelessWidget {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      IconButton(
+                       IconButton(
                         icon: const Icon(Icons.flash_off, color: Colors.white),
-                        onPressed: () {},
+                        onPressed: () {
+                           // controller.toggleTorch();
+                        },
                       ),
                       const Text(
                         'Scan Product',
@@ -59,9 +71,7 @@ class ScannerHomeScreen extends StatelessWidget {
                       ),
                       IconButton(
                         icon: const Icon(Icons.person, color: Colors.white),
-                        onPressed: () {
-                          // Profile
-                        },
+                        onPressed: () {},
                       ),
                     ],
                   ),
@@ -69,7 +79,7 @@ class ScannerHomeScreen extends StatelessWidget {
                 
                 const Spacer(),
                 
-                // Scanner Box
+                // Scanner Frame
                 Center(
                   child: Container(
                     width: 280,
@@ -80,52 +90,12 @@ class ScannerHomeScreen extends StatelessWidget {
                     ),
                     child: Stack(
                       children: [
-                        // Corner decors
-                        Positioned(
-                          top: 0, left: 0, 
-                          child: Container(width: 40, height: 40, 
-                            decoration: const BoxDecoration(
-                              border: Border(
-                                top: BorderSide(color: Color(0xFF00C9A7), width: 6),
-                                left: BorderSide(color: Color(0xFF00C9A7), width: 6),
-                                
-                              ),
-                               borderRadius: BorderRadius.only(topLeft: Radius.circular(20)),
-                            ))),
-                             Positioned(
-                          top: 0, right: 0, 
-                          child: Container(width: 40, height: 40, 
-                            decoration: const BoxDecoration(
-                              border: Border(
-                                top: BorderSide(color: Color(0xFF00C9A7), width: 6),
-                                right: BorderSide(color: Color(0xFF00C9A7), width: 6),
-                                
-                              ),
-                               borderRadius: BorderRadius.only(topRight: Radius.circular(20)),
-                            ))),
-                             Positioned(
-                          bottom: 0, left: 0, 
-                          child: Container(width: 40, height: 40, 
-                            decoration: const BoxDecoration(
-                              border: Border(
-                                bottom: BorderSide(color: Color(0xFF00C9A7), width: 6),
-                                left: BorderSide(color: Color(0xFF00C9A7), width: 6),
-                                
-                              ),
-                               borderRadius: BorderRadius.only(bottomLeft: Radius.circular(20)),
-                            ))),
-                             Positioned(
-                          bottom: 0, right: 0, 
-                          child: Container(width: 40, height: 40, 
-                            decoration: const BoxDecoration(
-                              border: Border(
-                                bottom: BorderSide(color: Color(0xFF00C9A7), width: 6),
-                                right: BorderSide(color: Color(0xFF00C9A7), width: 6),
-                                
-                              ),
-                               borderRadius: BorderRadius.only(bottomRight: Radius.circular(20)),
-                            ))),
-                        
+                         // Corner decors (visual only)
+                         _buildCorner(true, true),
+                         _buildCorner(true, false),
+                         _buildCorner(false, true),
+                         _buildCorner(false, false),
+
                         // Scanning Animation Line
                         Center(child: Container(
                           height: 2,
@@ -141,27 +111,23 @@ class ScannerHomeScreen extends StatelessWidget {
 
                 const Spacer(),
                 
-                // Bottom Instructions
                 const Text(
                   'Point your camera at a barcode',
                   style: TextStyle(color: Colors.white70),
                 ),
                 const SizedBox(height: 32),
                 
-                // Scan Button (Simulation)
+                 // Manual Input Alternative
                 Padding(
                   padding: const EdgeInsets.only(bottom: 48.0),
-                  child: ElevatedButton(
+                  child: TextButton.icon(
                     onPressed: () {
-                      context.push('/result');
+                       // Test barcode for Nutella: 3017620422003
+                       context.push('/result', extra: '3017620422003');
                     },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 16),
-                    ),
-                    child: const Text('Simulate Scan'),
-                  ).animate().scale(delay: 500.ms),
+                    icon: const Icon(Icons.keyboard, color: Colors.white),
+                    label: const Text('Simulate Scan (Nutella)', style: TextStyle(color: Colors.white)),
+                  ),
                 ),
               ],
             ),
@@ -170,4 +136,31 @@ class ScannerHomeScreen extends StatelessWidget {
       ),
     );
   }
+
+   Widget _buildCorner(bool top, bool left) {
+    return Positioned(
+      top: top ? 0 : null,
+      bottom: !top ? 0 : null,
+      left: left ? 0 : null,
+      right: !left ? 0 : null,
+      child: Container(
+        width: 40, 
+        height: 40,
+        decoration: BoxDecoration(
+          border: Border(
+            top: top ? const BorderSide(color: Color(0xFF00C9A7), width: 6) : BorderSide.none,
+            bottom: !top ? const BorderSide(color: Color(0xFF00C9A7), width: 6) : BorderSide.none,
+            left: left ? const BorderSide(color: Color(0xFF00C9A7), width: 6) : BorderSide.none,
+            right: !left ? const BorderSide(color: Color(0xFF00C9A7), width: 6) : BorderSide.none,
+          ),
+          borderRadius: BorderRadius.only(
+            topLeft: top && left ? const Radius.circular(20) : Radius.zero,
+            topRight: top && !left ? const Radius.circular(20) : Radius.zero,
+            bottomLeft: !top && left ? const Radius.circular(20) : Radius.zero,
+            bottomRight: !top && !left ? const Radius.circular(20) : Radius.zero,
+          ),
+        ),
+      ),
+    );
+   }
 }

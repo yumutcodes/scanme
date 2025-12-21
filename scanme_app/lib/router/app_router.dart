@@ -23,7 +23,10 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: '/result',
-      builder: (context, state) => const ProductResultScreen(),
+      builder: (context, state) {
+        final barcode = state.extra as String? ?? '0000000000000'; // Default or handle null
+        return ProductResultScreen(barcode: barcode);
+      },
     ),
   ],
 );
