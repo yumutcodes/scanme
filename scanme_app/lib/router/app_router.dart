@@ -5,9 +5,10 @@ import 'package:scanme_app/screens/product_result_screen.dart';
 import 'package:scanme_app/screens/register_screen.dart';
 import 'package:scanme_app/screens/scanner_home_screen.dart';
 import 'package:scanme_app/screens/history_screen.dart';
+import 'package:scanme_app/services/session_manager.dart';
 
 final appRouter = GoRouter(
-  initialLocation: '/',
+  initialLocation: SessionManager().isLoggedIn ? '/scan' : '/',
   routes: [
     GoRoute(path: '/', builder: (context, state) => const LoginScreen()),
     GoRoute(
@@ -16,7 +17,10 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: '/allergens',
-      builder: (context, state) => const AllergenSelectionScreen(),
+      builder: (context, state) {
+        final fromSettings = state.extra as bool? ?? false;
+        return AllergenSelectionScreen(fromSettings: fromSettings);
+      },
     ),
     GoRoute(
       path: '/scan',

@@ -69,11 +69,21 @@ class _ScannerHomeScreenState extends State<ScannerHomeScreen> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.history, color: Colors.white),
-                        onPressed: () {
-                          context.push('/history');
-                        },
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.history, color: Colors.white),
+                            onPressed: () {
+                              context.push('/history');
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.settings, color: Colors.white),
+                            onPressed: () {
+                              context.push('/allergens', extra: true); // Pass true for fromSettings
+                            },
+                          ),
+                        ],
                       ),
                     ],
                   ),

@@ -29,7 +29,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       try {
         final id = await DatabaseHelper.instance.createUser(user);
-        SessionManager().login(id);
+        await SessionManager().login(id);
         if (mounted) context.go('/allergens');
       } catch (e) {
         if (mounted) {

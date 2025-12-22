@@ -27,19 +27,17 @@ class _LoginScreenState extends State<LoginScreen> {
         
         // Backdoor for demo/testing without registration
         if (email == 'admin' && password == 'admin') {
-           SessionManager().login(1); // Assuming admin ID 1
-           if (mounted) context.go('/allergens'); // Go to allergens to set preferences
+           await SessionManager().login(1); // Assuming admin ID 1
+           if (mounted) context.go('/scan'); 
            return;
         }
 
         final user = await DatabaseHelper.instance.getUser(email, password);
         
         if (user != null && user.id != null) {
-          SessionManager().login(user.id!);
-          // Check if user has allergens set? 
-          // For now, let's always go to allergens screen to confirm, or logic to skip if already set.
-          // Simplest flow: Login -> Allergens -> Scan
-          if (mounted) context.go('/allergens'); 
+          await SessionManager().login(user.id!);
+          // Login success -> Scanner
+          if (mounted) context.go('/scan'); 
         } else {
            if (mounted) {
              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid credentials')));

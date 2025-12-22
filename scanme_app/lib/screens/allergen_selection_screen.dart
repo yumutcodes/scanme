@@ -5,7 +5,8 @@ import 'package:scanme_app/services/database_helper.dart';
 import 'package:scanme_app/services/session_manager.dart';
 
 class AllergenSelectionScreen extends StatefulWidget {
-  const AllergenSelectionScreen({super.key});
+  final bool fromSettings;
+  const AllergenSelectionScreen({super.key, this.fromSettings = false});
 
   @override
   State<AllergenSelectionScreen> createState() => _AllergenSelectionScreenState();
@@ -62,20 +63,26 @@ class _AllergenSelectionScreenState extends State<AllergenSelectionScreen> {
     });
   }
 
-  // ... build method etc.
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Select Allergens'),
+        leading: widget.fromSettings
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => context.go('/scan'),
+              )
+            : null,
         actions: [
-          IconButton(
-            onPressed: () {
-              // Skip or Info
-            },
-            icon: const Icon(Icons.info_outline),
-          ),
+          if (widget.fromSettings)
+            IconButton(
+              icon: const Icon(Icons.logout, color: Colors.red),
+              onPressed: () async {
+                await SessionManager().logout();
+                if (context.mounted) context.go('/');
+              },
+            )
         ],
       ),
       body: Column(
