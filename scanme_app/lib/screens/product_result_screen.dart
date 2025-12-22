@@ -10,6 +10,7 @@ import 'package:scanme_app/services/database_helper.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:openfoodfacts/openfoodfacts.dart';
 import 'package:scanme_app/services/product_service.dart';
+import 'package:scanme_app/services/session_manager.dart';
 
 class ProductResultScreen extends StatefulWidget {
   final String barcode;
@@ -21,20 +22,31 @@ class ProductResultScreen extends StatefulWidget {
 }
 
 class _ProductResultScreenState extends State<ProductResultScreen> {
-  // In a real app, this should come from a Provider/State Management
-  final Set<String> _userAllergens = {'Hazelnuts', 'Milk (Dairy)', 'Gluten'}; 
+  // ... state class
 
+  final Set<String> _userAllergens = {};
   late Future<Product?> _productFuture;
 
   @override
   void initState() {
     super.initState();
+    _loadUserAllergens();
     _productFuture = ProductService.getProduct(widget.barcode);
     _productFuture.then((product) {
        if (product != null) {
           _saveToHistory(product);
        }
     });
+  }
+
+  Future<void> _loadUserAllergens() async {
+     final userId = SessionManager().currentUserId;
+     if (userId != null) {
+       final loaded = await DatabaseHelper.instance.getUserAllergens(userId);
+       setState(() {
+         _userAllergens.addAll(loaded);
+       });
+     }
   }
 
   Future<void> _saveToHistory(Product product) async {

@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:scanme_app/services/database_helper.dart';
+import 'package:scanme_app/services/session_manager.dart';
 
 class AllergenSelectionScreen extends StatefulWidget {
   const AllergenSelectionScreen({super.key});
 
   @override
-  State<AllergenSelectionScreen> createState() =>
-      _AllergenSelectionScreenState();
+  State<AllergenSelectionScreen> createState() => _AllergenSelectionScreenState();
 }
 
 class _AllergenSelectionScreenState extends State<AllergenSelectionScreen> {
@@ -25,16 +26,43 @@ class _AllergenSelectionScreenState extends State<AllergenSelectionScreen> {
   ];
 
   final Set<String> _selectedAllergens = {};
+  bool _isLoading = true;
 
-  void _toggleAllergen(String allergen) {
+  @override
+  void initState() {
+    super.initState();
+    _loadAllergens();
+  }
+
+  Future<void> _loadAllergens() async {
+    final userId = SessionManager().currentUserId;
+    if (userId != null) {
+      final savedAllergens = await DatabaseHelper.instance.getUserAllergens(userId);
+      setState(() {
+        _selectedAllergens.addAll(savedAllergens);
+        _isLoading = false;
+      });
+    } else {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _toggleAllergen(String allergen) async {
+    final userId = SessionManager().currentUserId;
+    if (userId == null) return; // Should navigate to login if null
+
     setState(() {
       if (_selectedAllergens.contains(allergen)) {
         _selectedAllergens.remove(allergen);
+        DatabaseHelper.instance.removeUserAllergen(userId, allergen);
       } else {
         _selectedAllergens.add(allergen);
+        DatabaseHelper.instance.addUserAllergen(userId, allergen);
       }
     });
   }
+
+  // ... build method etc.
 
   @override
   Widget build(BuildContext context) {

@@ -124,17 +124,17 @@ class _ScannerHomeScreenState extends State<ScannerHomeScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 48.0),
                   child: Container(
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.1),
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: TextField(
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(color: Colors.black),
                       decoration: const InputDecoration(
                         hintText: 'Enter Barcode manually',
-                        hintStyle: TextStyle(color: Colors.white38),
+                        hintStyle: TextStyle(color: Colors.black54),
                         border: InputBorder.none,
                         contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        suffixIcon: Icon(Icons.search, color: Colors.white54),
+                        suffixIcon: Icon(Icons.search, color: Colors.black54),
                       ),
                       keyboardType: TextInputType.number,
                       onSubmitted: (value) {
