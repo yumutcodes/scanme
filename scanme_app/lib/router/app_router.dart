@@ -4,6 +4,7 @@ import 'package:scanme_app/screens/login_screen.dart';
 import 'package:scanme_app/screens/product_result_screen.dart';
 import 'package:scanme_app/screens/register_screen.dart';
 import 'package:scanme_app/screens/scanner_home_screen.dart';
+import 'package:scanme_app/screens/history_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -27,6 +28,10 @@ final appRouter = GoRouter(
         final barcode = state.extra as String? ?? '0000000000000'; // Default or handle null
         return ProductResultScreen(barcode: barcode);
       },
+    ),
+    GoRoute(
+       path: '/history',
+       builder: (context, state) => const HistoryScreen(),
     ),
   ],
 );

@@ -1,5 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:scanme_app/services/database_helper.dart';
+
+// ... other imports
+
+// In ProductResultScreen, we need to save the result.
+// I will rewrite ProductResultScreen to incorporate the save logic.
+
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:openfoodfacts/openfoodfacts.dart';
 import 'package:scanme_app/services/product_service.dart';
@@ -15,7 +22,7 @@ class ProductResultScreen extends StatefulWidget {
 
 class _ProductResultScreenState extends State<ProductResultScreen> {
   // In a real app, this should come from a Provider/State Management
-  final Set<String> _userAllergens = {'Hazelnuts', 'Milk (Dairy)', 'Gluten'}; // Mock user state
+  final Set<String> _userAllergens = {'Hazelnuts', 'Milk (Dairy)', 'Gluten'}; 
 
   late Future<Product?> _productFuture;
 
@@ -23,6 +30,26 @@ class _ProductResultScreenState extends State<ProductResultScreen> {
   void initState() {
     super.initState();
     _productFuture = ProductService.getProduct(widget.barcode);
+    _productFuture.then((product) {
+       if (product != null) {
+          _saveToHistory(product);
+       }
+    });
+  }
+
+  Future<void> _saveToHistory(Product product) async {
+    final detectedAllergens = ProductService.checkAllergens(product, _userAllergens);
+    final isSafe = detectedAllergens.isEmpty;
+    final name = product.productName ?? product.brands ?? 'Unknown Product';
+
+    final item = ScanItem(
+      barcode: widget.barcode,
+      productName: name,
+      isSafe: isSafe,
+      scanDate: DateTime.now(),
+    );
+
+    await DatabaseHelper.instance.create(item);
   }
 
   @override
@@ -44,21 +71,48 @@ class _ProductResultScreenState extends State<ProductResultScreen> {
 
           if (snapshot.hasError || !snapshot.hasData || snapshot.data == null) {
              return Center(
-               child: Column(
-                 mainAxisAlignment: MainAxisAlignment.center,
-                 children: [
-                   const Icon(Icons.search_off, size: 64, color: Colors.grey),
-                   const SizedBox(height: 16),
-                   const Text("Product not found"),
-                   const SizedBox(height: 8),
-                   Text("Barcode: ${widget.barcode}", style: const TextStyle(color: Colors.grey)),
-                 ],
+               child: Padding(
+                 padding: const EdgeInsets.all(24.0),
+                 child: Column(
+                   mainAxisAlignment: MainAxisAlignment.center,
+                   children: [
+                     const Icon(Icons.search_off, size: 80, color: Colors.grey),
+                     const SizedBox(height: 24),
+                     Text(
+                       "Product Not Found",
+                       style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                     ),
+                     const SizedBox(height: 8),
+                     const Text(
+                       "We couldn't find this product in our database. You can add it yourself to help others!",
+                       textAlign: TextAlign.center,
+                       style: TextStyle(color: Colors.grey),
+                     ),
+                     const SizedBox(height: 16),
+                     Text("Barcode: ${widget.barcode}", style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                     const SizedBox(height: 32),
+                     ElevatedButton.icon(
+                        onPressed: () {
+                          // TODO: Navigate to Add Product Screen
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Add Product feature coming soon!')));
+                        },
+                        icon: const Icon(Icons.add_circle_outline),
+                        label: const Text('Add Product Manually'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          backgroundColor: const Color(0xFF00C9A7),
+                          foregroundColor: Colors.white,
+                        ),
+                     ),
+                   ],
+                 ),
                ),
              );
           }
 
           final product = snapshot.data!;
           final detectedAllergens = ProductService.checkAllergens(product, _userAllergens);
+          // final detectedAllergens = <String>[];
           final bool containsAllergen = detectedAllergens.isNotEmpty;
 
           return SingleChildScrollView(
@@ -72,7 +126,11 @@ class _ProductResultScreenState extends State<ProductResultScreen> {
                   child: Stack(
                     children: [
                        if (product.imageFrontUrl != null)
-                        Image.network(product.imageFrontUrl!, fit: BoxFit.cover, width: double.infinity, height: double.infinity)
+                        Image.network(product.imageFrontUrl!, fit: BoxFit.cover, width: double.infinity, height: double.infinity,
+                         errorBuilder: (context, error, stackTrace) {
+                            return const Center(child: Icon(Icons.broken_image, size: 64, color: Colors.grey));
+                         },
+                        )
                        else
                         Center(
                           child: Column(
@@ -171,9 +229,8 @@ class _ProductResultScreenState extends State<ProductResultScreen> {
 
                       Row(
                         children: [
-                          if (product.allergens?.names != null) ...[
-                             // Just showing a count or generic badge for simplicity
-                             _buildBadge(context, '${product.allergens!.names.length} Allergens listed', Colors.orange),
+                          if (product.allergens?.ids?.isNotEmpty ?? false) ...[
+                             _buildBadge(context, '${product.allergens!.ids!.length} Allergens listed', Colors.orange),
                           ]
                         ],
                       ),

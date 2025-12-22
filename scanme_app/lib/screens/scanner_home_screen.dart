@@ -70,8 +70,10 @@ class _ScannerHomeScreenState extends State<ScannerHomeScreen> {
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.person, color: Colors.white),
-                        onPressed: () {},
+                        icon: const Icon(Icons.history, color: Colors.white),
+                        onPressed: () {
+                          context.push('/history');
+                        },
                       ),
                     ],
                   ),
@@ -115,18 +117,47 @@ class _ScannerHomeScreenState extends State<ScannerHomeScreen> {
                   'Point your camera at a barcode',
                   style: TextStyle(color: Colors.white70),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 16),
+                
+                // Manual Entry
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 48.0),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: TextField(
+                      style: const TextStyle(color: Colors.white),
+                      decoration: const InputDecoration(
+                        hintText: 'Enter Barcode manually',
+                        hintStyle: TextStyle(color: Colors.white38),
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        suffixIcon: Icon(Icons.search, color: Colors.white54),
+                      ),
+                      keyboardType: TextInputType.number,
+                      onSubmitted: (value) {
+                        if (value.isNotEmpty) {
+                           context.push('/result', extra: value);
+                        }
+                      },
+                    ),
+                  ),
+                ),
+                
+                const SizedBox(height: 16),
                 
                  // Manual Input Alternative
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 48.0),
+                  padding: const EdgeInsets.only(bottom: 32.0),
                   child: TextButton.icon(
                     onPressed: () {
                        // Test barcode for Nutella: 3017620422003
                        context.push('/result', extra: '3017620422003');
                     },
-                    icon: const Icon(Icons.keyboard, color: Colors.white),
-                    label: const Text('Simulate Scan (Nutella)', style: TextStyle(color: Colors.white)),
+                    icon: const Icon(Icons.bug_report, color: Colors.white54),
+                    label: const Text('Test: Nutella', style: TextStyle(color: Colors.white54)),
                   ),
                 ),
               ],
