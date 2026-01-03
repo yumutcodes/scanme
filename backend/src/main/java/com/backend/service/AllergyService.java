@@ -40,7 +40,7 @@ public class AllergyService {
     public List<AllergyDto> getAllAllergy(String userEmail){
         User user = userService.findUserByEmail(userEmail);
 
-        var allergies = allergyRepository.findByUsersNotContaining(user);
+        var allergies = allergyRepository.findByUserNotContaining(user);
 
         if(allergies.isEmpty()){
             return null;
