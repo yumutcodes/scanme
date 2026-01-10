@@ -1,0 +1,36 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: scanme-mysql
+    environment:
+      MYSQL_DATABASE: scanmeappdb
+      MYSQL_ROOT_PASSWORD: S3cur3P@ssw0rd!2026#Mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - scanme-network
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: scanme-backend
+    restart: on-failure
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/scanmeappdb
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: S3cur3P@ssw0rd!2026#Mysql
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - scanme-network
+
+networks:
+  scanme-network:
+    driver: bridge
