@@ -17,10 +17,7 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
-    // Increment version to trigger schema update if needed, but since we are dev, we can just handle onCreate 
-    // strictly speaking if the app is already installed with version 1, we should handle onUpgrade. 
-    // For simplicity in this dev session, I'll assume clean install or increment version and handle upgrade.
-    return await openDatabase(path, version: 2, onCreate: _createDB, onUpgrade: _onUpgrade);
+    return await openDatabase(path, version: 3, onCreate: _createDB, onUpgrade: _onUpgrade);
   }
 
   Future _createDB(Database db, int version) async {
@@ -33,6 +30,7 @@ class DatabaseHelper {
     await db.execute('''
 CREATE TABLE history ( 
   id $idType, 
+  userId $integerType,
   barcode $textType,
   productName $textType,
   isSafe $boolType,
@@ -60,6 +58,28 @@ CREATE TABLE user_allergens (
   }
 
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 3) {
+       // Recreate history to add userId column
+       await db.execute('DROP TABLE IF EXISTS history');
+       
+       const idType = 'INTEGER PRIMARY KEY AUTOINCREMENT';
+       const textType = 'TEXT NOT NULL';
+       const boolType = 'INTEGER NOT NULL';
+       const integerType = 'INTEGER NOT NULL';
+       
+      await db.execute('''
+CREATE TABLE history ( 
+  id $idType, 
+  userId $integerType,
+  barcode $textType,
+  productName $textType,
+  isSafe $boolType,
+  scanDate $textType
+  )
+''');
+    }
+    
+    // Ensure Users and Allergens tables exist (for v1->v2->v3 path)
     if (oldVersion < 2) {
       const idType = 'INTEGER PRIMARY KEY AUTOINCREMENT';
       const textType = 'TEXT NOT NULL';
@@ -163,15 +183,22 @@ CREATE TABLE user_allergens (
   }
 
   // --- History CRUD ---
-  Future<int> create(ScanItem item) async {
+  Future<int> create(ScanItem item, int userId) async {
     final db = await instance.database;
-    return await db.insert('history', item.toJson());
+    final json = item.toJson();
+    json['userId'] = userId;
+    return await db.insert('history', json);
   }
 
-  Future<List<ScanItem>> readAllHistory() async {
+  Future<List<ScanItem>> readAllHistory(int userId) async {
     final db = await instance.database;
     const orderBy = 'scanDate DESC';
-    final result = await db.query('history', orderBy: orderBy);
+    final result = await db.query(
+      'history', 
+      where: 'userId = ?', 
+      whereArgs: [userId], 
+      orderBy: orderBy
+    );
     return result.map((json) => ScanItem.fromJson(json)).toList();
   }
 
@@ -220,13 +247,25 @@ class ScanItem {
         scanDate: scanDate ?? this.scanDate,
       );
 
-  static ScanItem fromJson(Map<String, Object?> json) => ScanItem(
-        id: json['id'] as int?,
-        barcode: json['barcode'] as String,
-        productName: json['productName'] as String,
-        isSafe: (json['isSafe'] as int) == 1,
-        scanDate: DateTime.parse(json['scanDate'] as String),
-      );
+  static ScanItem fromJson(Map<String, Object?> json) {
+    var isSafeVal = json['isSafe'];
+    bool safe;
+    if (isSafeVal is int) {
+      safe = isSafeVal == 1;
+    } else if (isSafeVal is bool) {
+      safe = isSafeVal;
+    } else {
+      safe = false; // Fallback
+    }
+
+    return ScanItem(
+      id: json['id'] as int?,
+      barcode: json['barcode'] as String,
+      productName: json['productName'] as String,
+      isSafe: safe,
+      scanDate: DateTime.parse(json['scanDate'] as String),
+    );
+  }
 
   Map<String, Object?> toJson() => {
         'id': id,

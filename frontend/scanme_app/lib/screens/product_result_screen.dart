@@ -5,6 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:openfoodfacts/openfoodfacts.dart';
 import 'package:scanme_app/services/product_service.dart';
 import 'package:scanme_app/services/session_manager.dart';
+import 'package:scanme_app/services/api_service.dart';
 import 'package:logger/logger.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:scanme_app/widgets/shimmer_loading.dart';
@@ -96,7 +97,17 @@ class _ProductResultScreenState extends State<ProductResultScreen> {
         scanDate: DateTime.now(),
       );
 
-      await DatabaseHelper.instance.create(item);
+      // Always save to local SQLite
+      final userId = SessionManager().currentUserId;
+      if (userId != null) {
+        await DatabaseHelper.instance.create(item, userId);
+      }
+      
+      // If logged in to backend, sync scan immediately
+      if (SessionManager().hasBackendToken) {
+        await ApiService.saveHistory(item);
+      }
+      
       _logger.i('Saved scan to history: $name');
     } catch (e) {
       _logger.e('Failed to save to history', error: e);

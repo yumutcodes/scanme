@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:scanme_app/services/database_helper.dart';
 import 'package:scanme_app/services/session_manager.dart';
 import 'package:scanme_app/services/hash_service.dart';
+import 'package:scanme_app/services/api_service.dart';
 import 'package:scanme_app/exceptions/app_exceptions.dart';
 import 'package:scanme_app/widgets/error_display.dart';
 import 'package:logger/logger.dart';
@@ -31,27 +32,60 @@ class _LoginScreenState extends State<LoginScreen> {
         final email = _emailController.text.trim().toLowerCase();
         final password = _passwordController.text;
         
-        // Fetch user by email
-        final user = await DatabaseHelper.instance.getUserByEmail(email);
+        String? jwtToken;
         
-        if (user == null) {
-          throw AuthException.invalidCredentials();
+        // 1. Try Online Login
+        try {
+          jwtToken = await ApiService.login(email, password);
+        } catch (e) {
+          _logger.w('Online login attempt failed, falling back to local: $e');
         }
-        
-        // Verify password using hash service
-        final isValidPassword = HashService().verifyPassword(password, user.password);
-        
-        if (!isValidPassword) {
-          throw AuthException.invalidCredentials();
+
+        User? user;
+
+        if (jwtToken != null) {
+          // Online Success
+          _logger.i('Online login successful');
+          
+          // Ensure user exists locally for offline capability
+          user = await DatabaseHelper.instance.getUserByEmail(email);
+          if (user == null) {
+             // Create local user
+             final hashedPassword = HashService().hashPassword(password);
+             final newUser = User(email: email, password: hashedPassword);
+             final id = await DatabaseHelper.instance.createUser(newUser);
+             user = User(id: id, email: email, password: hashedPassword);
+          }
+          
+          // Start Session with JWT
+          await SessionManager().login(user.id!, jwtToken: jwtToken);
+          
+          // Sync Data
+          await ApiService.syncUserData(user.id!);
+          
+        } else {
+          // 2. Offline Fallback
+          _logger.i('Attempting offline login');
+          
+          user = await DatabaseHelper.instance.getUserByEmail(email);
+          
+          if (user == null) {
+             throw AuthException.invalidCredentials();
+          }
+          
+          final isValidPassword = HashService().verifyPassword(password, user.password);
+          if (!isValidPassword) {
+            throw AuthException.invalidCredentials();
+          }
+          
+          // Start Session (Local only)
+          await SessionManager().login(user.id!);
         }
         
         if (user.id == null) {
-          throw AuthException.userNotFound();
+           throw AuthException.userNotFound();
         }
-        
-        // Create session with secure token
-        await SessionManager().login(user.id!);
-        
+
         _logger.i('User logged in successfully: ${user.email}');
         
         // Navigate to scanner

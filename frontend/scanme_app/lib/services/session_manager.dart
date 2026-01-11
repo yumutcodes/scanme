@@ -19,11 +19,13 @@ class SessionManager {
 
   static const String _keySessionToken = 'session_token';
   static const String _keyUserId = 'user_id';
-  static const String _keySessionCreatedAt = 'session_created_at';
+  static const _keySessionCreatedAt = 'session_created_at';
+  static const _keyJwtToken = 'jwt_token';
 
   static const _uuid = Uuid();
 
   String? _sessionToken;
+  String? _jwtToken;
   int? _currentUserId;
   DateTime? _sessionCreatedAt;
 
@@ -34,6 +36,7 @@ class SessionManager {
   Future<void> init() async {
     try {
       _sessionToken = await _storage.read(key: _keySessionToken);
+      _jwtToken = await _storage.read(key: _keyJwtToken);
       final userIdStr = await _storage.read(key: _keyUserId);
       final createdAtStr = await _storage.read(key: _keySessionCreatedAt);
 
@@ -52,22 +55,27 @@ class SessionManager {
     } catch (e) {
       // If we can't read from secure storage, ensure we're logged out
       _sessionToken = null;
+      _jwtToken = null;
       _currentUserId = null;
       _sessionCreatedAt = null;
     }
   }
 
   /// Login user and create a new session token
-  Future<String> login(int userId) async {
+  Future<String> login(int userId, {String? jwtToken}) async {
     // Generate a new UUID session token
     final token = _uuid.v4();
     final now = DateTime.now();
 
     _sessionToken = token;
+    _jwtToken = jwtToken;
     _currentUserId = userId;
     _sessionCreatedAt = now;
 
     await _storage.write(key: _keySessionToken, value: token);
+    if (jwtToken != null) {
+      await _storage.write(key: _keyJwtToken, value: jwtToken);
+    }
     await _storage.write(key: _keyUserId, value: userId.toString());
     await _storage.write(key: _keySessionCreatedAt, value: now.toIso8601String());
 
@@ -77,10 +85,12 @@ class SessionManager {
   /// Logout and clear all session data
   Future<void> logout() async {
     _sessionToken = null;
+    _jwtToken = null;
     _currentUserId = null;
     _sessionCreatedAt = null;
 
     await _storage.delete(key: _keySessionToken);
+    await _storage.delete(key: _keyJwtToken);
     await _storage.delete(key: _keyUserId);
     await _storage.delete(key: _keySessionCreatedAt);
   }
@@ -88,6 +98,9 @@ class SessionManager {
   /// Check if user is logged in with a valid session
   bool get isLoggedIn => 
       _sessionToken != null && _currentUserId != null && !isSessionExpired;
+  
+  /// Check if user has a backend JWT (Online mode capable)
+  bool get hasBackendToken => _jwtToken != null;
 
   /// Check if session has expired
   bool get isSessionExpired {
@@ -100,6 +113,9 @@ class SessionManager {
 
   /// Get current session token (null if not logged in)
   String? get sessionToken => isLoggedIn ? _sessionToken : null;
+  
+  /// Get JWT token (null if not logged in or offline mode)
+  String? get jwtToken => _jwtToken;
 
   /// Refresh the session (extend expiration)
   Future<void> refreshSession() async {

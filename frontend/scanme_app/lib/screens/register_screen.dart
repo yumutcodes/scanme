@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:scanme_app/services/database_helper.dart';
 import 'package:scanme_app/services/session_manager.dart';
 import 'package:scanme_app/services/hash_service.dart';
+import 'package:scanme_app/services/api_service.dart';
 import 'package:scanme_app/exceptions/app_exceptions.dart';
 import 'package:scanme_app/widgets/error_display.dart';
 import 'package:logger/logger.dart';
@@ -33,27 +34,53 @@ class _RegisterScreenState extends State<RegisterScreen> {
       try {
         final email = _emailController.text.trim().toLowerCase();
         final password = _passwordController.text;
+        final fullName = _nameController.text.trim();
+        
+        // Split name for backend
+        final nameParts = fullName.split(' ');
+        final name = nameParts.first;
+        final surname = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
+        final username = email; // Use email as username to ensure uniqueness
 
-        // Check if email already exists
+        // Check if email already exists locally (fast check)
         final emailExists = await DatabaseHelper.instance.emailExists(email);
         if (emailExists) {
           throw AuthException.userAlreadyExists();
         }
+        
+        // 1. Try Online Registration
+        bool onlineSuccess = false;
+        try {
+           onlineSuccess = await ApiService.register(email, password, name, surname, username);
+        } catch (e) {
+           _logger.w('Online registration failed: $e');
+        }
 
-        // Hash the password before storing
+        // Hash the password before storing locally
         final hashedPassword = HashService().hashPassword(password);
 
         final user = User(
           email: email,
           password: hashedPassword,
         );
-
+        
+        // Create local user
         final id = await DatabaseHelper.instance.createUser(user);
         
         _logger.i('User registered successfully: $email');
         
-        // Create session with secure token
-        await SessionManager().login(id);
+        // If online registration succeeded, try to auto-login to get token
+        String? jwtToken;
+        if (onlineSuccess) {
+           try {
+             jwtToken = await ApiService.login(email, password);
+           } catch (e) {
+             _logger.w('Auto-login after registration failed: $e');
+           }
+        }
+        
+        // Create session with secure token (and JWT if available)
+        await SessionManager().login(id, jwtToken: jwtToken);
         
         // Navigate to allergen selection
         if (mounted) context.go('/allergens');

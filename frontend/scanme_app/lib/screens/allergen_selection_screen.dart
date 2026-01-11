@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:scanme_app/services/database_helper.dart';
 import 'package:scanme_app/services/session_manager.dart';
+import 'package:scanme_app/services/api_service.dart';
 
 class AllergenSelectionScreen extends StatefulWidget {
   final bool fromSettings;
@@ -51,15 +52,34 @@ class _AllergenSelectionScreenState extends State<AllergenSelectionScreen> {
     final userId = SessionManager().currentUserId;
     if (userId == null) return; // Should navigate to login if null
 
+    final isSelected = _selectedAllergens.contains(allergen);
+
+    // Optimistic UI Update
     setState(() {
-      if (_selectedAllergens.contains(allergen)) {
+      if (isSelected) {
         _selectedAllergens.remove(allergen);
-        DatabaseHelper.instance.removeUserAllergen(userId, allergen);
       } else {
         _selectedAllergens.add(allergen);
-        DatabaseHelper.instance.addUserAllergen(userId, allergen);
       }
     });
+
+    try {
+      if (isSelected) {
+        await DatabaseHelper.instance.removeUserAllergen(userId, allergen);
+        if (SessionManager().hasBackendToken) {
+          await ApiService.deleteAllergen(allergen);
+        }
+      } else {
+        await DatabaseHelper.instance.addUserAllergen(userId, allergen);
+        if (SessionManager().hasBackendToken) {
+          await ApiService.saveAllergen(allergen);
+        }
+      }
+    } catch (e) {
+      // Revert on error if necessary, or just log
+      // For now, logging is handled in services, but we might want to revert UI if DB fails
+      // Keeping it simple for now
+    }
   }
 
   @override

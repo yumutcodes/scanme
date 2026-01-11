@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:scanme_app/services/database_helper.dart';
+import 'package:scanme_app/services/session_manager.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:scanme_app/widgets/empty_state_widget.dart';
 
@@ -22,7 +23,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   void _loadHistory() {
-    _historyFuture = DatabaseHelper.instance.readAllHistory();
+    final userId = SessionManager().currentUserId;
+    if (userId != null) {
+      _historyFuture = DatabaseHelper.instance.readAllHistory(userId);
+    } else {
+      _historyFuture = Future.value([]);
+    }
   }
 
   Future<void> _refreshHistory() async {
