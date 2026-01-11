@@ -8,6 +8,7 @@ import 'package:scanme_app/services/api_service.dart';
 import 'package:scanme_app/exceptions/app_exceptions.dart';
 import 'package:scanme_app/widgets/error_display.dart';
 import 'package:logger/logger.dart';
+import 'package:scanme_app/config/app_config.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -31,14 +32,16 @@ class _LoginScreenState extends State<LoginScreen> {
       try {
         final email = _emailController.text.trim().toLowerCase();
         final password = _passwordController.text;
-        
+
         String? jwtToken;
-        
-        // 1. Try Online Login
-        try {
-          jwtToken = await ApiService.login(email, password);
-        } catch (e) {
-          _logger.w('Online login attempt failed, falling back to local: $e');
+
+        // 1. Try Online Login (if not in mock mode)
+        if (!AppConfig.useMockData) {
+          try {
+            jwtToken = await ApiService.login(email, password);
+          } catch (e) {
+            _logger.w('Online login attempt failed, falling back to local: $e');
+          }
         }
 
         User? user;
@@ -46,51 +49,52 @@ class _LoginScreenState extends State<LoginScreen> {
         if (jwtToken != null) {
           // Online Success
           _logger.i('Online login successful');
-          
+
           // Ensure user exists locally for offline capability
           user = await DatabaseHelper.instance.getUserByEmail(email);
           if (user == null) {
-             // Create local user
-             final hashedPassword = HashService().hashPassword(password);
-             final newUser = User(email: email, password: hashedPassword);
-             final id = await DatabaseHelper.instance.createUser(newUser);
-             user = User(id: id, email: email, password: hashedPassword);
+            // Create local user
+            final hashedPassword = HashService().hashPassword(password);
+            final newUser = User(email: email, password: hashedPassword);
+            final id = await DatabaseHelper.instance.createUser(newUser);
+            user = User(id: id, email: email, password: hashedPassword);
           }
-          
+
           // Start Session with JWT
           await SessionManager().login(user.id!, jwtToken: jwtToken);
-          
+
           // Sync Data
           await ApiService.syncUserData(user.id!);
-          
         } else {
           // 2. Offline Fallback
           _logger.i('Attempting offline login');
-          
+
           user = await DatabaseHelper.instance.getUserByEmail(email);
-          
+
           if (user == null) {
-             throw AuthException.invalidCredentials();
+            throw AuthException.invalidCredentials();
           }
-          
-          final isValidPassword = HashService().verifyPassword(password, user.password);
+
+          final isValidPassword = HashService().verifyPassword(
+            password,
+            user.password,
+          );
           if (!isValidPassword) {
             throw AuthException.invalidCredentials();
           }
-          
+
           // Start Session (Local only)
           await SessionManager().login(user.id!);
         }
-        
+
         if (user.id == null) {
-           throw AuthException.userNotFound();
+          throw AuthException.userNotFound();
         }
 
         _logger.i('User logged in successfully: ${user.email}');
-        
+
         // Navigate to scanner
         if (mounted) context.go('/scan');
-        
       } on AuthException catch (e) {
         _logger.w('Login failed: ${e.message}');
         if (mounted) {
@@ -99,7 +103,10 @@ class _LoginScreenState extends State<LoginScreen> {
       } catch (e) {
         _logger.e('Unexpected login error: $e');
         if (mounted) {
-          ErrorSnackbar.show(context, message: 'An unexpected error occurred. Please try again.');
+          ErrorSnackbar.show(
+            context,
+            message: 'An unexpected error occurred. Please try again.',
+          );
         }
       } finally {
         if (mounted) setState(() => _isLoading = false);
@@ -181,12 +188,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         prefixIcon: const Icon(Icons.lock_outline),
                         suffixIcon: IconButton(
                           icon: Icon(
-                            _obscurePassword 
-                                ? Icons.visibility_outlined 
+                            _obscurePassword
+                                ? Icons.visibility_outlined
                                 : Icons.visibility_off_outlined,
                           ),
                           onPressed: () {
-                            setState(() => _obscurePassword = !_obscurePassword);
+                            setState(
+                              () => _obscurePassword = !_obscurePassword,
+                            );
                           },
                         ),
                       ),
@@ -200,7 +209,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 32),
                     ElevatedButton(
                       onPressed: _isLoading ? null : _login,
-                      child: _isLoading 
+                      child: _isLoading
                           ? const SizedBox(
                               height: 20,
                               width: 20,

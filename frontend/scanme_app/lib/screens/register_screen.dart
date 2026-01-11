@@ -8,6 +8,7 @@ import 'package:scanme_app/services/api_service.dart';
 import 'package:scanme_app/exceptions/app_exceptions.dart';
 import 'package:scanme_app/widgets/error_display.dart';
 import 'package:logger/logger.dart';
+import 'package:scanme_app/config/app_config.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -50,10 +51,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
         
         // 1. Try Online Registration
         bool onlineSuccess = false;
-        try {
-           onlineSuccess = await ApiService.register(email, password, name, surname, username);
-        } catch (e) {
-           _logger.w('Online registration failed: $e');
+        if (!AppConfig.useMockData) {
+          try {
+            onlineSuccess = await ApiService.register(
+              email,
+              password,
+              name,
+              surname,
+              username,
+            );
+          } catch (e) {
+            _logger.w('Online registration failed: $e');
+          }
         }
 
         // Hash the password before storing locally
