@@ -7,6 +7,7 @@ import 'package:scanme_app/theme/app_theme.dart';
 import 'package:scanme_app/services/session_manager.dart';
 import 'package:scanme_app/services/connectivity_service.dart';
 import 'package:scanme_app/services/onboarding_service.dart';
+import 'package:scanme_app/config/app_config.dart';
 
 final Logger _logger = Logger(
   printer: PrettyPrinter(
@@ -26,6 +27,7 @@ void main() async {
   _setupErrorHandlers();
 
   // Initialize services (order matters - onboarding first for initial route)
+  await AppConfig.init(); // Initialize config first
   await OnboardingService().init();
   await SessionManager().init();
   await ConnectivityService().init();

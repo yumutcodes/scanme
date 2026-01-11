@@ -1,6 +1,7 @@
 import 'package:openfoodfacts/openfoodfacts.dart';
 import 'package:scanme_app/exceptions/app_exceptions.dart';
 import 'package:logger/logger.dart';
+import 'package:scanme_app/config/app_config.dart';
 
 /// Result wrapper for product lookups
 class ProductResult {
@@ -86,6 +87,18 @@ class ProductService {
       );
     }
 
+    // STRICT MODE: Check Environment Config first
+    if (AppConfig.useMockData) {
+      _logger.i('Environment configured for MOCK DATA. Skipping API call.');
+      final mockProduct = _mockDb[barcode];
+      if (mockProduct != null) {
+        return ProductResult(product: mockProduct, isFromMock: true);
+      }
+      return ProductResult(
+        errorMessage: 'Product not found in Mock Database (Mock Mode)',
+      );
+    }
+
     final ProductQueryConfiguration configuration = ProductQueryConfiguration(
       barcode,
       language: OpenFoodFactsLanguage.ENGLISH,
@@ -109,15 +122,6 @@ class ProductService {
         _logger.i('Product found from API: ${result.product?.productName}');
         return ProductResult(product: result.product);
       } else {
-        // API returned no product, try mock database
-        _logger.d('Product not found in API, checking mock database');
-        final mockProduct = _mockDb[barcode];
-        
-        if (mockProduct != null) {
-          _logger.i('Product found in mock database: ${mockProduct.productName}');
-          return ProductResult(product: mockProduct, isFromMock: true);
-        }
-        
         _logger.w('Product not found for barcode: $barcode');
         return ProductResult(
           errorMessage: 'Product not found for barcode: $barcode',
@@ -125,14 +129,7 @@ class ProductService {
       }
     } catch (e, stackTrace) {
       _logger.e('API error fetching product', error: e, stackTrace: stackTrace);
-      
-      // Try mock database as fallback
-      final mockProduct = _mockDb[barcode];
-      if (mockProduct != null) {
-        _logger.i('Falling back to mock database: ${mockProduct.productName}');
-        return ProductResult(product: mockProduct, isFromMock: true);
-      }
-      
+           
       // Determine error type
       String errorMessage;
       if (e.toString().contains('SocketException') || 
