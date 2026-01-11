@@ -9,7 +9,8 @@ class AllergenSelectionScreen extends StatefulWidget {
   const AllergenSelectionScreen({super.key, this.fromSettings = false});
 
   @override
-  State<AllergenSelectionScreen> createState() => _AllergenSelectionScreenState();
+  State<AllergenSelectionScreen> createState() =>
+      _AllergenSelectionScreenState();
 }
 
 class _AllergenSelectionScreenState extends State<AllergenSelectionScreen> {
@@ -27,7 +28,6 @@ class _AllergenSelectionScreenState extends State<AllergenSelectionScreen> {
   ];
 
   final Set<String> _selectedAllergens = {};
-  bool _isLoading = true;
 
   @override
   void initState() {
@@ -38,14 +38,13 @@ class _AllergenSelectionScreenState extends State<AllergenSelectionScreen> {
   Future<void> _loadAllergens() async {
     final userId = SessionManager().currentUserId;
     if (userId != null) {
-      final savedAllergens = await DatabaseHelper.instance.getUserAllergens(userId);
+      final savedAllergens = await DatabaseHelper.instance.getUserAllergens(
+        userId,
+      );
       setState(() {
         _selectedAllergens.addAll(savedAllergens);
-        _isLoading = false;
       });
-    } else {
-      setState(() => _isLoading = false);
-    }
+    } else {}
   }
 
   Future<void> _toggleAllergen(String allergen) async {
@@ -82,7 +81,7 @@ class _AllergenSelectionScreenState extends State<AllergenSelectionScreen> {
                 await SessionManager().logout();
                 if (context.mounted) context.go('/');
               },
-            )
+            ),
         ],
       ),
       body: Column(
@@ -124,7 +123,9 @@ class _AllergenSelectionScreenState extends State<AllergenSelectionScreen> {
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
+                          ? Theme.of(
+                              context,
+                            ).primaryColor.withValues(alpha: 0.1)
                           : Colors.white,
                       border: Border.all(
                         color: isSelected

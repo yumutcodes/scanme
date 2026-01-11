@@ -104,6 +104,35 @@ CREATE TABLE user_allergens (
       return null;
     }
   }
+
+  /// Get user by email only (for hashed password verification)
+  Future<User?> getUserByEmail(String email) async {
+    final db = await instance.database;
+    final maps = await db.query(
+      'users',
+      columns: ['id', 'email', 'password'],
+      where: 'email = ?',
+      whereArgs: [email],
+    );
+
+    if (maps.isNotEmpty) {
+      return User.fromJson(maps.first);
+    } else {
+      return null;
+    }
+  }
+  
+  /// Check if email already exists
+  Future<bool> emailExists(String email) async {
+    final db = await instance.database;
+    final maps = await db.query(
+      'users',
+      columns: ['id'],
+      where: 'email = ?',
+      whereArgs: [email],
+    );
+    return maps.isNotEmpty;
+  }
   
   // --- Allergen CRUD ---
   Future<int> addUserAllergen(int userId, String allergen) async {

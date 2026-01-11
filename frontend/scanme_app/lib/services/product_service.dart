@@ -1,6 +1,26 @@
 import 'package:openfoodfacts/openfoodfacts.dart';
+import 'package:scanme_app/exceptions/app_exceptions.dart';
+import 'package:logger/logger.dart';
+
+/// Result wrapper for product lookups
+class ProductResult {
+  final Product? product;
+  final bool isFromMock;
+  final String? errorMessage;
+
+  ProductResult({
+    this.product,
+    this.isFromMock = false,
+    this.errorMessage,
+  });
+
+  bool get isSuccess => product != null;
+  bool get isError => errorMessage != null;
+}
 
 class ProductService {
+  static final Logger _logger = Logger();
+  
   // Mock Database for fallback
   static final Map<String, Product> _mockDb = {
     '111111': Product(
@@ -42,7 +62,7 @@ class ProductService {
        productName: 'Ülker Çikolatalı Gofret',
        brands: 'Ülker',
        ingredientsText: 'Şeker, Buğday Unu, Bitkisel Yağlar, Fındık (%6), Süt Tozu, Kakao Tozu, Peynir Altı Suyu Tozu, Emülgatör (Soya Lesitini), Tuz, Kabartıcılar, Aroma Vericiler.',
-       imageFrontUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR616GfwGgVqC85W3iC3wHj6WqG2k0R9n8LzA&s', // Placeholder URL
+       imageFrontUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR616GfwGgVqC85W3iC3wHj6WqG2k0R9n8LzA&s',
        allergens: Allergens([], ['en:hazelnuts', 'en:milk', 'en:gluten', 'en:soybeans']),
     ),
     '8690624103128': Product(
@@ -50,16 +70,22 @@ class ProductService {
        productName: 'Eti Negro',
        brands: 'Eti',
        ingredientsText: 'Buğday Unu (Gluten), Şeker, Bitkisel Yağ, Kakao (%8), Süt Tozu, Kabartıcılar, Tuz, Aroma Vericiler.',
-       imageFrontUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTGqj021q6s2k0R9n8LzA&s', // Placeholder URL
+       imageFrontUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTGqj021q6s2k0R9n8LzA&s',
        allergens: Allergens([], ['en:gluten', 'en:milk']),
     ),
   };
 
-  static Future<Product?> getProduct(String barcode) async {
-    // 1. Try Mock DB first (for testing stability/demo) or Validation fallback
-    // In a real scenario, this would be try API -> catch -> return Mock
-    // For this demo, let's try API first, then Mock.
-    
+  /// Fetch product with comprehensive error handling.
+  /// Returns a ProductResult which contains either the product or error info.
+  static Future<ProductResult> getProductWithResult(String barcode) async {
+    // Validate barcode format
+    if (barcode.isEmpty || !_isValidBarcode(barcode)) {
+      _logger.w('Invalid barcode format: $barcode');
+      return ProductResult(
+        errorMessage: 'Invalid barcode format',
+      );
+    }
+
     final ProductQueryConfiguration configuration = ProductQueryConfiguration(
       barcode,
       language: OpenFoodFactsLanguage.ENGLISH,
@@ -75,18 +101,75 @@ class ProductService {
     );
 
     try {
+      _logger.d('Fetching product from API: $barcode');
+      
       final ProductResultV3 result = await OpenFoodAPIClient.getProductV3(configuration);
+      
       if (result.status == ProductResultV3.statusSuccess && result.product != null) {
-        return result.product;
+        _logger.i('Product found from API: ${result.product?.productName}');
+        return ProductResult(product: result.product);
       } else {
-        // API returned no product, try Mock
-        return _mockDb[barcode];
+        // API returned no product, try mock database
+        _logger.d('Product not found in API, checking mock database');
+        final mockProduct = _mockDb[barcode];
+        
+        if (mockProduct != null) {
+          _logger.i('Product found in mock database: ${mockProduct.productName}');
+          return ProductResult(product: mockProduct, isFromMock: true);
+        }
+        
+        _logger.w('Product not found for barcode: $barcode');
+        return ProductResult(
+          errorMessage: 'Product not found for barcode: $barcode',
+        );
       }
-    } catch (e) {
-      // Network/API error, try Mock
-      // debugPrint('API Error: $e');
-      return _mockDb[barcode];
+    } catch (e, stackTrace) {
+      _logger.e('API error fetching product', error: e, stackTrace: stackTrace);
+      
+      // Try mock database as fallback
+      final mockProduct = _mockDb[barcode];
+      if (mockProduct != null) {
+        _logger.i('Falling back to mock database: ${mockProduct.productName}');
+        return ProductResult(product: mockProduct, isFromMock: true);
+      }
+      
+      // Determine error type
+      String errorMessage;
+      if (e.toString().contains('SocketException') || 
+          e.toString().contains('Connection refused')) {
+        errorMessage = 'No internet connection. Please check your network.';
+      } else if (e.toString().contains('TimeoutException')) {
+        errorMessage = 'Request timed out. Please try again.';
+      } else {
+        errorMessage = 'Failed to fetch product. Please try again.';
+      }
+      
+      return ProductResult(errorMessage: errorMessage);
     }
+  }
+
+  /// Original method signature preserved for backward compatibility.
+  /// Now wraps getProductWithResult.
+  static Future<Product?> getProduct(String barcode) async {
+    final result = await getProductWithResult(barcode);
+    
+    if (result.isError) {
+      throw ProductException.fetchFailed(result.errorMessage);
+    }
+    
+    return result.product;
+  }
+
+  /// Validates barcode format (EAN-8, EAN-13, UPC-A, UPC-E)
+  static bool _isValidBarcode(String barcode) {
+    // Allow numeric barcodes of common lengths
+    if (!RegExp(r'^\d+$').hasMatch(barcode)) {
+      return false;
+    }
+    
+    // Common barcode lengths: 6 (mock), 8 (EAN-8), 12 (UPC-A), 13 (EAN-13), 14 (GTIN-14)
+    final validLengths = [6, 8, 12, 13, 14];
+    return validLengths.contains(barcode.length);
   }
 
   // Basic matching logic
