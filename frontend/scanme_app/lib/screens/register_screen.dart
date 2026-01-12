@@ -48,48 +48,53 @@ class _RegisterScreenState extends State<RegisterScreen> {
         if (emailExists) {
           throw AuthException.userAlreadyExists();
         }
-        
-        // 1. Try Online Registration
-        bool onlineSuccess = false;
-        if (!AppConfig.useMockData) {
-          try {
-            onlineSuccess = await ApiService.register(
-              email,
-              password,
-              name,
-              surname,
-              username,
-            );
-          } catch (e) {
-            _logger.w('Online registration failed: $e');
-          }
-        }
 
-        // Hash the password before storing locally
-        final hashedPassword = HashService().hashPassword(password);
-
-        final user = User(
-          email: email,
-          password: hashedPassword,
-        );
-        
-        // Create local user
-        final id = await DatabaseHelper.instance.createUser(user);
-        
-        _logger.i('User registered successfully: $email');
-        
-        // If online registration succeeded, try to auto-login to get token
+        int userId;
         String? jwtToken;
-        if (onlineSuccess) {
-           try {
-             jwtToken = await ApiService.login(email, password);
-           } catch (e) {
-             _logger.w('Auto-login after registration failed: $e');
-           }
+
+        if (AppConfig.useMockData) {
+          // Mock Mode: Use local database only
+          _logger.i('Mock mode: Registering locally');
+
+          // Hash the password before storing locally
+          final hashedPassword = HashService().hashPassword(password);
+
+          final user = User(
+            email: email,
+            password: hashedPassword,
+          );
+
+          // Create local user
+          userId = await DatabaseHelper.instance.createUser(user);
+          _logger.i('User registered locally: $email');
+        } else {
+          // Backend Mode: API is required
+          _logger.i('Backend mode: Registering online');
+
+          // Register with backend (will throw on failure)
+          await ApiService.register(
+            email,
+            password,
+            name,
+            surname,
+            username,
+          );
+
+          // Auto-login to get JWT token
+          jwtToken = await ApiService.login(email, password);
+
+          // Create local user for offline capability
+          final hashedPassword = HashService().hashPassword(password);
+          final user = User(
+            email: email,
+            password: hashedPassword,
+          );
+          userId = await DatabaseHelper.instance.createUser(user);
+          _logger.i('User registered successfully: $email');
         }
-        
+
         // Create session with secure token (and JWT if available)
-        await SessionManager().login(id, jwtToken: jwtToken);
+        await SessionManager().login(userId, jwtToken: jwtToken);
         
         // Navigate to allergen selection
         if (mounted) context.go('/allergens');

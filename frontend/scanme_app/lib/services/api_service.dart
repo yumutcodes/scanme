@@ -26,7 +26,7 @@ class ApiService {
 
   // --- Auth ---
 
-  static Future<String?> login(String email, String password) async {
+  static Future<String> login(String email, String password) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/token'),
@@ -35,22 +35,22 @@ class ApiService {
           'email': email,
           'password': password,
         }),
-      );
+      ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         // TokenController returns raw string
         return response.body;
       } else {
         _logger.w('Login failed: ${response.statusCode} ${response.body}');
-        return null;
+        throw Exception('Login failed: Invalid credentials');
       }
     } catch (e) {
       _logger.e('Login error', error: e);
-      return null;
+      rethrow;
     }
   }
 
-  static Future<bool> register(String email, String password, String name, String surname, String username) async {
+  static Future<void> register(String email, String password, String name, String surname, String username) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/users'),
@@ -61,14 +61,17 @@ class ApiService {
           'name': name,
           'surname': surname,
           'username': username,
-          'role': 'USER'
+          'role': 'ROLE_USER'
         }),
-      );
+      ).timeout(const Duration(seconds: 10));
 
-      return response.statusCode == 200;
+      if (response.statusCode != 200) {
+        _logger.w('Registration failed: ${response.statusCode} ${response.body}');
+        throw Exception('Registration failed: ${response.body}');
+      }
     } catch (e) {
       _logger.e('Registration error', error: e);
-      return false;
+      rethrow;
     }
   }
 

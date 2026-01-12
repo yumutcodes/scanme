@@ -33,41 +33,11 @@ class _LoginScreenState extends State<LoginScreen> {
         final email = _emailController.text.trim().toLowerCase();
         final password = _passwordController.text;
 
-        String? jwtToken;
-
-        // 1. Try Online Login (if not in mock mode)
-        if (!AppConfig.useMockData) {
-          try {
-            jwtToken = await ApiService.login(email, password);
-          } catch (e) {
-            _logger.w('Online login attempt failed, falling back to local: $e');
-          }
-        }
-
         User? user;
 
-        if (jwtToken != null) {
-          // Online Success
-          _logger.i('Online login successful');
-
-          // Ensure user exists locally for offline capability
-          user = await DatabaseHelper.instance.getUserByEmail(email);
-          if (user == null) {
-            // Create local user
-            final hashedPassword = HashService().hashPassword(password);
-            final newUser = User(email: email, password: hashedPassword);
-            final id = await DatabaseHelper.instance.createUser(newUser);
-            user = User(id: id, email: email, password: hashedPassword);
-          }
-
-          // Start Session with JWT
-          await SessionManager().login(user.id!, jwtToken: jwtToken);
-
-          // Sync Data
-          await ApiService.syncUserData(user.id!);
-        } else {
-          // 2. Offline Fallback
-          _logger.i('Attempting offline login');
+        if (AppConfig.useMockData) {
+          // Mock Mode: Use local database only
+          _logger.i('Mock mode: Attempting local login');
 
           user = await DatabaseHelper.instance.getUserByEmail(email);
 
@@ -85,6 +55,27 @@ class _LoginScreenState extends State<LoginScreen> {
 
           // Start Session (Local only)
           await SessionManager().login(user.id!);
+        } else {
+          // Backend Mode: API is required
+          _logger.i('Backend mode: Attempting online login');
+
+          final jwtToken = await ApiService.login(email, password);
+
+          // Ensure user exists locally for offline capability
+          user = await DatabaseHelper.instance.getUserByEmail(email);
+          if (user == null) {
+            // Create local user
+            final hashedPassword = HashService().hashPassword(password);
+            final newUser = User(email: email, password: hashedPassword);
+            final id = await DatabaseHelper.instance.createUser(newUser);
+            user = User(id: id, email: email, password: hashedPassword);
+          }
+
+          // Start Session with JWT
+          await SessionManager().login(user.id!, jwtToken: jwtToken);
+
+          // Sync Data
+          await ApiService.syncUserData(user.id!);
         }
 
         if (user.id == null) {
