@@ -1,6 +1,5 @@
 package com.backend.service;
 
-
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
@@ -11,14 +10,13 @@ import org.springframework.stereotype.Service;
 import javax.crypto.SecretKey;
 import java.util.Date;
 
-
 @Service
 public class JwtService {
 
     @Value("${SECRET.KEY}")
     private String SECRET_KEY;
 
-    public String generateToken(String email, String role){
+    public String generateToken(String email, String role) {
 
         return Jwts.builder()
                 .subject(email)
@@ -28,15 +26,15 @@ public class JwtService {
                 .signWith(getSignKey())
                 .compact();
     }
-    ///TODO: Token süresine karar vermedik değiştirilecek.
+    /// TODO: Token süresine karar vermedik değiştirilecek.
 
-    public boolean validateToken(String token, String username){
+    public boolean validateToken(String token, String username) {
         Date expirationDate = extractExpirationDate(token);
         String tokenUserName = extractMail(token);
-        return expirationDate.after(new Date( System.currentTimeMillis())) && username.equals(tokenUserName);
+        return expirationDate.after(new Date(System.currentTimeMillis())) && username.equals(tokenUserName);
     }
 
-    private Date extractExpirationDate(String token){
+    private Date extractExpirationDate(String token) {
         Claims claims = Jwts.parser()
                 .verifyWith(getSignKey())
                 .build()
