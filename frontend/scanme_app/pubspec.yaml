@@ -45,6 +45,19 @@ dependencies:
   path: ^1.9.1
   intl: ^0.20.2
   shared_preferences: ^2.5.4
+  
+  # Phase 1 Security Packages
+  flutter_secure_storage: ^9.0.0
+  crypto: ^3.0.3
+  uuid: ^4.4.0
+  logger: ^2.2.0
+  
+  # Phase 2 Core MVP Packages
+  connectivity_plus: ^6.0.3      # Network connectivity detection
+  shimmer: ^3.0.0                # Loading placeholder animations
+  vibration: ^2.0.0              # Haptic feedback on scan
+  cached_network_image: ^3.3.1   # Image caching for offline support
+  flutter_dotenv: ^6.0.0
 
 dev_dependencies:
   flutter_test:
@@ -56,6 +69,10 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
+  
+  # Phase 3 - App Icon & Splash Screen
+  flutter_launcher_icons: ^0.13.1
+  flutter_native_splash: ^2.4.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

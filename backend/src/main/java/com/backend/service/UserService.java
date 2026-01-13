@@ -15,6 +15,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+
     public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
@@ -23,7 +24,7 @@ public class UserService {
     public void saveUser(UserPostRequest userPostRequest) {
         Optional<User> user = userRepository.findByEmail(userPostRequest.getEmail());
 
-        if(user.isPresent()) {
+        if (user.isPresent()) {
             throw new MailWithUserAlreadyExistsException("User with this email already exists");
         }
 
@@ -46,5 +47,9 @@ public class UserService {
 
     protected void updateUser(User user) {
         userRepository.save(user);
+    }
+
+    public boolean userExistsByEmail(String email) {
+        return userRepository.findByEmail(email).isPresent();
     }
 }

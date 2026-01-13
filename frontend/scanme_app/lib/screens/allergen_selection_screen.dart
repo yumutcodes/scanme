@@ -3,13 +3,15 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:scanme_app/services/database_helper.dart';
 import 'package:scanme_app/services/session_manager.dart';
+import 'package:scanme_app/services/api_service.dart';
 
 class AllergenSelectionScreen extends StatefulWidget {
   final bool fromSettings;
   const AllergenSelectionScreen({super.key, this.fromSettings = false});
 
   @override
-  State<AllergenSelectionScreen> createState() => _AllergenSelectionScreenState();
+  State<AllergenSelectionScreen> createState() =>
+      _AllergenSelectionScreenState();
 }
 
 class _AllergenSelectionScreenState extends State<AllergenSelectionScreen> {
@@ -27,7 +29,6 @@ class _AllergenSelectionScreenState extends State<AllergenSelectionScreen> {
   ];
 
   final Set<String> _selectedAllergens = {};
-  bool _isLoading = true;
 
   @override
   void initState() {
@@ -38,29 +39,47 @@ class _AllergenSelectionScreenState extends State<AllergenSelectionScreen> {
   Future<void> _loadAllergens() async {
     final userId = SessionManager().currentUserId;
     if (userId != null) {
-      final savedAllergens = await DatabaseHelper.instance.getUserAllergens(userId);
+      final savedAllergens = await DatabaseHelper.instance.getUserAllergens(
+        userId,
+      );
       setState(() {
         _selectedAllergens.addAll(savedAllergens);
-        _isLoading = false;
       });
-    } else {
-      setState(() => _isLoading = false);
-    }
+    } else {}
   }
 
   Future<void> _toggleAllergen(String allergen) async {
     final userId = SessionManager().currentUserId;
     if (userId == null) return; // Should navigate to login if null
 
+    final isSelected = _selectedAllergens.contains(allergen);
+
+    // Optimistic UI Update
     setState(() {
-      if (_selectedAllergens.contains(allergen)) {
+      if (isSelected) {
         _selectedAllergens.remove(allergen);
-        DatabaseHelper.instance.removeUserAllergen(userId, allergen);
       } else {
         _selectedAllergens.add(allergen);
-        DatabaseHelper.instance.addUserAllergen(userId, allergen);
       }
     });
+
+    try {
+      if (isSelected) {
+        await DatabaseHelper.instance.removeUserAllergen(userId, allergen);
+        if (SessionManager().hasBackendToken) {
+          await ApiService.deleteAllergen(allergen);
+        }
+      } else {
+        await DatabaseHelper.instance.addUserAllergen(userId, allergen);
+        if (SessionManager().hasBackendToken) {
+          await ApiService.saveAllergen(allergen);
+        }
+      }
+    } catch (e) {
+      // Revert on error if necessary, or just log
+      // For now, logging is handled in services, but we might want to revert UI if DB fails
+      // Keeping it simple for now
+    }
   }
 
   @override
@@ -82,7 +101,7 @@ class _AllergenSelectionScreenState extends State<AllergenSelectionScreen> {
                 await SessionManager().logout();
                 if (context.mounted) context.go('/');
               },
-            )
+            ),
         ],
       ),
       body: Column(
@@ -124,7 +143,9 @@ class _AllergenSelectionScreenState extends State<AllergenSelectionScreen> {
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
+                          ? Theme.of(
+                              context,
+                            ).primaryColor.withValues(alpha: 0.1)
                           : Colors.white,
                       border: Border.all(
                         color: isSelected

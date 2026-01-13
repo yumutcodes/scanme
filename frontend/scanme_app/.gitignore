@@ -43,3 +43,22 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# User specific temporary files
+junkmds/
+*.txt
+analysis_*.txt
+analyze_output.txt
+
+# Local configuration files (do not commit)
+**/android/local.properties
+.env
+
+# Gradle cache
+.gradle/
+
+# Ignored Platforms
+ios/
+linux/
+macos/
+web/

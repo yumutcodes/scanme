@@ -6,21 +6,19 @@ public class ProductDetailDto {
     private String barcode;
     private String productName;
     private List<String> ingredients;
-    private List<String> userSelections;
+    // userSelections removed - allergen detection is handled by frontend
     private List<DangerousIngredientDto> dangerousIngredients;
 
     public ProductDetailDto() {
     }
 
     public ProductDetailDto(String barcode,
-                            String productName,
-                            List<String> ingredients,
-                            List<String> userSelections,
-                            List<DangerousIngredientDto> dangerousIngredients) {
+            String productName,
+            List<String> ingredients,
+            List<DangerousIngredientDto> dangerousIngredients) {
         this.barcode = barcode;
         this.productName = productName;
         this.ingredients = ingredients;
-        this.userSelections = userSelections;
         this.dangerousIngredients = dangerousIngredients;
     }
 
@@ -46,14 +44,6 @@ public class ProductDetailDto {
 
     public void setIngredients(List<String> ingredients) {
         this.ingredients = ingredients;
-    }
-
-    public List<String> getUserSelections() {
-        return userSelections;
-    }
-
-    public void setUserSelections(List<String> userSelections) {
-        this.userSelections = userSelections;
     }
 
     public List<DangerousIngredientDto> getDangerousIngredients() {

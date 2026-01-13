@@ -1,6 +1,100 @@
+import 'dart:convert';
+import 'dart:io';
+import 'package:http/http.dart' as http;
 import 'package:openfoodfacts/openfoodfacts.dart';
+import 'package:scanme_app/exceptions/app_exceptions.dart';
+import 'package:logger/logger.dart';
+import 'package:scanme_app/config/app_config.dart';
+import 'package:scanme_app/services/session_manager.dart';
+
+/// DTO for backend product response
+class BackendProductDetail {
+  final String barcode;
+  final String productName;
+  final List<String> ingredients;
+  // userSelections removed - allergen detection is handled entirely by frontend
+  final List<DangerousIngredient> dangerousIngredients;
+
+  BackendProductDetail({
+    required this.barcode,
+    required this.productName,
+    required this.ingredients,
+    required this.dangerousIngredients,
+  });
+
+  factory BackendProductDetail.fromJson(Map<String, dynamic> json) {
+    return BackendProductDetail(
+      barcode: json['barcode'] ?? '',
+      productName: json['productName'] ?? '',
+      ingredients: List<String>.from(json['ingredients'] ?? []),
+      dangerousIngredients: (json['dangerousIngredients'] as List<dynamic>?)
+          ?.map((e) => DangerousIngredient.fromJson(e))
+          .toList() ?? [],
+    );
+  }
+
+  /// Convert to OpenFoodFacts Product for compatibility
+  Product toProduct() {
+    return Product(
+      barcode: barcode,
+      productName: productName,
+      ingredientsText: ingredients.join(', '),
+      allergens: Allergens([], []),
+    );
+  }
+}
+
+class DangerousIngredient {
+  final String name;
+  final int dangerLevel;
+
+  DangerousIngredient({required this.name, required this.dangerLevel});
+
+  factory DangerousIngredient.fromJson(Map<String, dynamic> json) {
+    return DangerousIngredient(
+      name: json['name'] ?? '',
+      dangerLevel: json['dangerLevel'] ?? 0,
+    );
+  }
+}
+
+/// Result wrapper for product lookups
+class ProductResult {
+  final Product? product;
+  final BackendProductDetail? backendProduct;
+  final bool isFromMock;
+  final bool isFromBackend;
+  final String? errorMessage;
+
+  ProductResult({
+    this.product,
+    this.backendProduct,
+    this.isFromMock = false,
+    this.isFromBackend = false,
+    this.errorMessage,
+  });
+
+  bool get isSuccess => product != null || backendProduct != null;
+  bool get isError => errorMessage != null;
+  
+  /// Get product name from either source
+  String? get productName => backendProduct?.productName ?? product?.productName;
+  
+  /// Get ingredients text from either source
+  String? get ingredientsText => backendProduct?.ingredients.join(', ') ?? product?.ingredientsText;
+}
 
 class ProductService {
+  static final Logger _logger = Logger();
+
+  // Backend API URL
+  static String get _baseUrl {
+    if (Platform.isAndroid) {
+      return 'http://10.0.2.2:8080';
+    }
+    return 'http://localhost:8080';
+  }
+  
   // Mock Database for fallback
   static final Map<String, Product> _mockDb = {
     '111111': Product(
@@ -42,7 +136,7 @@ class ProductService {
        productName: 'Ülker Çikolatalı Gofret',
        brands: 'Ülker',
        ingredientsText: 'Şeker, Buğday Unu, Bitkisel Yağlar, Fındık (%6), Süt Tozu, Kakao Tozu, Peynir Altı Suyu Tozu, Emülgatör (Soya Lesitini), Tuz, Kabartıcılar, Aroma Vericiler.',
-       imageFrontUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR616GfwGgVqC85W3iC3wHj6WqG2k0R9n8LzA&s', // Placeholder URL
+       imageFrontUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR616GfwGgVqC85W3iC3wHj6WqG2k0R9n8LzA&s',
        allergens: Allergens([], ['en:hazelnuts', 'en:milk', 'en:gluten', 'en:soybeans']),
     ),
     '8690624103128': Product(
@@ -50,17 +144,79 @@ class ProductService {
        productName: 'Eti Negro',
        brands: 'Eti',
        ingredientsText: 'Buğday Unu (Gluten), Şeker, Bitkisel Yağ, Kakao (%8), Süt Tozu, Kabartıcılar, Tuz, Aroma Vericiler.',
-       imageFrontUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTGqj021q6s2k0R9n8LzA&s', // Placeholder URL
+       imageFrontUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTGqj021q6s2k0R9n8LzA&s',
        allergens: Allergens([], ['en:gluten', 'en:milk']),
     ),
   };
 
-  static Future<Product?> getProduct(String barcode) async {
-    // 1. Try Mock DB first (for testing stability/demo) or Validation fallback
-    // In a real scenario, this would be try API -> catch -> return Mock
-    // For this demo, let's try API first, then Mock.
-    
-    final ProductQueryConfiguration configuration = ProductQueryConfiguration(
+  /// Fetch product from backend API
+  static Future<ProductResult> _fetchFromBackend(String barcode) async {
+    final token = SessionManager().jwtToken;
+    if (token == null || token.isEmpty) {
+      _logger.w('No JWT token available for backend request');
+      return ProductResult(
+        errorMessage: 'Not authenticated. Please login first.',
+      );
+    }
+
+    try {
+      _logger.d('Fetching product from backend: $barcode');
+      _logger.d('Using token (first 20 chars): ${token.length > 20 ? token.substring(0, 20) : token}...');
+      
+      final response = await http.get(
+        Uri.parse('$_baseUrl/products/search?barcode=$barcode'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        final backendProduct = BackendProductDetail.fromJson(json);
+        _logger.i('Product found from backend: ${backendProduct.productName}');
+        return ProductResult(
+          backendProduct: backendProduct,
+          product: backendProduct.toProduct(),
+          isFromBackend: true,
+        );
+      } else if (response.statusCode == 404) {
+        _logger.w('Product not found in backend: $barcode');
+        return ProductResult(
+          errorMessage: 'Product not found',
+        );
+      } else if (response.statusCode == 403 || response.statusCode == 401) {
+        _logger.w('Auth error: ${response.statusCode} - ${response.body}');
+        // Don't automatically logout - let the user decide
+        return ProductResult(
+          errorMessage: 'Authentication error (${response.statusCode}). Please try logging out and back in.',
+        );
+      } else {
+        _logger.w('Backend error: ${response.statusCode} ${response.body}');
+        return ProductResult(
+          errorMessage: 'Server error: ${response.statusCode}',
+        );
+      }
+    } catch (e, stackTrace) {
+      _logger.e('Backend API error', error: e, stackTrace: stackTrace);
+      
+      String errorMessage;
+      if (e.toString().contains('SocketException') || 
+          e.toString().contains('Connection refused')) {
+        errorMessage = 'Cannot connect to server. Check if backend is running.';
+      } else if (e.toString().contains('TimeoutException')) {
+        errorMessage = 'Request timed out. Server slow or unreachable.';
+      } else {
+        errorMessage = 'Error: ${e.toString()}';
+      }
+      
+      return ProductResult(errorMessage: errorMessage);
+    }
+  }
+
+  /// Fetch product from OpenFoodFacts API
+  static Future<ProductResult> _fetchFromOpenFoodFacts(String barcode) async {
+     final ProductQueryConfiguration configuration = ProductQueryConfiguration(
       barcode,
       language: OpenFoodFactsLanguage.ENGLISH,
       fields: [
@@ -75,18 +231,96 @@ class ProductService {
     );
 
     try {
+      _logger.d('Fetching product from OpenFoodFacts: $barcode');
+      
       final ProductResultV3 result = await OpenFoodAPIClient.getProductV3(configuration);
+      
       if (result.status == ProductResultV3.statusSuccess && result.product != null) {
-        return result.product;
+        _logger.i('Product found from OpenFoodFacts: ${result.product?.productName}');
+        return ProductResult(product: result.product);
       } else {
-        // API returned no product, try Mock
-        return _mockDb[barcode];
+        _logger.w('Product not found for barcode: $barcode');
+        return ProductResult(
+          errorMessage: 'Product not found for barcode: $barcode',
+        );
       }
-    } catch (e) {
-      // Network/API error, try Mock
-      // debugPrint('API Error: $e');
-      return _mockDb[barcode];
+    } catch (e, stackTrace) {
+      _logger.e('OpenFoodFacts API error', error: e, stackTrace: stackTrace);
+           
+      String errorMessage;
+      if (e.toString().contains('SocketException') || 
+          e.toString().contains('Connection refused')) {
+        errorMessage = 'No internet connection. Please check your network.';
+      } else if (e.toString().contains('TimeoutException')) {
+        errorMessage = 'Request timed out. Please try again.';
+      } else {
+        errorMessage = 'Failed to fetch product. Please try again.';
+      }
+      
+      return ProductResult(errorMessage: errorMessage);
     }
+  }
+
+  /// Fetch product from Mock Data
+  static Future<ProductResult> _fetchFromMock(String barcode) async {
+    _logger.i('Fetching product from MOCK DB: $barcode');
+    final mockProduct = _mockDb[barcode];
+    if (mockProduct != null) {
+      return ProductResult(product: mockProduct, isFromMock: true);
+    }
+    return ProductResult(
+      errorMessage: 'Product not found in Mock Database (Mock Mode)',
+    );
+  }
+
+  /// Fetch product with comprehensive error handling.
+  /// Returns a ProductResult which contains either the product or error info.
+  static Future<ProductResult> getProductWithResult(String barcode) async {
+    // Validate barcode format
+    if (barcode.isEmpty || !_isValidBarcode(barcode)) {
+      _logger.w('Invalid barcode format: $barcode');
+      return ProductResult(
+        errorMessage: 'Invalid barcode format',
+      );
+    }
+
+    // 1. Check Mock/Offline Mode Flag
+    if (AppConfig.useMockData) {
+      return await _fetchFromMock(barcode);
+    }
+
+    // 2. Select API Source
+    switch (AppConfig.scanningSource) {
+      case ScanningSource.backend:
+        return await _fetchFromBackend(barcode);
+        
+      case ScanningSource.openFoodFacts:
+        return await _fetchFromOpenFoodFacts(barcode);
+    }
+  }
+
+  /// Original method signature preserved for backward compatibility.
+  /// Now wraps getProductWithResult.
+  static Future<Product?> getProduct(String barcode) async {
+    final result = await getProductWithResult(barcode);
+    
+    if (result.isError) {
+      throw ProductException.fetchFailed(result.errorMessage);
+    }
+    
+    return result.product;
+  }
+
+  /// Validates barcode format (EAN-8, EAN-13, UPC-A, UPC-E)
+  static bool _isValidBarcode(String barcode) {
+    // Allow numeric barcodes of common lengths
+    if (!RegExp(r'^\d+$').hasMatch(barcode)) {
+      return false;
+    }
+    
+    // Common barcode lengths: 6 (mock), 8 (EAN-8), 12 (UPC-A), 13 (EAN-13), 14 (GTIN-14)
+    final validLengths = [6, 8, 12, 13, 14];
+    return validLengths.contains(barcode.length);
   }
 
   // Basic matching logic
@@ -99,7 +333,7 @@ class ProductService {
     // Helper map to match user selections to potential ingredient keywords and tags
     final Map<String, List<String>> lexicon = {
       'Peanuts': ['peanut', 'arachis', 'en:peanuts'],
-      'Tree Nuts': ['nut', 'almond', 'cashew', 'walnut', 'hazelnut', 'pecan', 'en:nuts', 'en:hazelnuts'],
+      'Tree Nuts': ['almond', 'cashew', 'walnut', 'hazelnut', 'pecan', 'pistachio', 'macadamia', 'chestnut', 'brazil nut', 'en:nuts', 'en:hazelnuts', 'en:almonds', 'en:cashews', 'en:walnuts'],
       'Milk (Dairy)': ['milk', 'lactose', 'cheese', 'cream', 'whey', 'butter', 'yogurt', 'en:milk'],
       'Eggs': ['egg', 'albumin', 'en:eggs'],
       'Soy': ['soy', 'soya', 'tofu', 'lecithin', 'en:soybeans'],

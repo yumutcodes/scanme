@@ -8,7 +8,7 @@ public class TokenRequest {
     }
 
     public TokenRequest(String mail, String password) {
-        this.email = email;
+        this.email = mail;
         this.password = password;
     }
 

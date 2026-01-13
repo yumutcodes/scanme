@@ -20,18 +20,20 @@ public class AllergyController {
     }
 
     @PostMapping("/allergies")
-    public ResponseEntity<?> saveAAllergyForUser(@RequestBody AllergyDto allergyDto, @RequestHeader("Authorization") String token){
+    public ResponseEntity<?> saveAAllergyForUser(@RequestBody AllergyDto allergyDto,
+            @RequestHeader("Authorization") String token) {
         return ResponseEntity.ok(allergyService.saveAllergyForAUser(allergyDto, jwtService.extractMail(token)));
     }
 
     @DeleteMapping("/allergies")
-    public ResponseEntity<?> deleteAAllergyForUser(@RequestBody AllergyDto allergyDto, @RequestHeader("Authorization") String token){
+    public ResponseEntity<?> deleteAAllergyForUser(@RequestBody AllergyDto allergyDto,
+            @RequestHeader("Authorization") String token) {
         allergyService.deleteAAllergyForUser(allergyDto, jwtService.extractMail(token));
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/allergies")
-    public ResponseEntity<List<AllergyDto>> getAllergies(@RequestHeader("Authorization") String token){
+    public ResponseEntity<List<AllergyDto>> getAllergies(@RequestHeader("Authorization") String token) {
         return ResponseEntity.ok(allergyService.getAllAllergy(jwtService.extractMail(token)));
     }
 }
