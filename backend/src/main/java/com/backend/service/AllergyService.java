@@ -7,26 +7,31 @@ import com.backend.model.User;
 import com.backend.repository.AllergyRepository;
 import org.springframework.stereotype.Service;
 
+import java.util.Collections;
 import java.util.List;
+import jakarta.persistence.EntityNotFoundException;
 
 @Service
 public class AllergyService {
 
     private final AllergyRepository allergyRepository;
-    private final AllergyConverter  allergyConverter;
+    private final AllergyConverter allergyConverter;
     private final UserService userService;
 
-    public AllergyService(AllergyRepository allergyRepository, AllergyConverter allergyConverter, UserService userService) {
+    public AllergyService(AllergyRepository allergyRepository, AllergyConverter allergyConverter,
+            UserService userService) {
         this.allergyRepository = allergyRepository;
         this.allergyConverter = allergyConverter;
         this.userService = userService;
     }
 
-    public AllergyDto saveAllergyForAUser(AllergyDto allergyDto, String userEmail){
+    public AllergyDto saveAllergyForAUser(AllergyDto allergyDto, String userEmail) {
         User user = userService.findUserByEmail(userEmail);
 
         Allergy allergy = allergyRepository.findByName(allergyDto.getAllergy_name());
-
+        if (allergy == null) {
+            throw new EntityNotFoundException("Allergy not found: " + allergyDto.getAllergy_name());
+        }
 
         if (!user.getAllergies().contains(allergy)) {
             user.getAllergies().add(allergy);
@@ -37,13 +42,13 @@ public class AllergyService {
         return new AllergyDto(allergy.getId(), allergy.getName());
     }
 
-    public List<AllergyDto> getAllAllergy(String userEmail){
+    public List<AllergyDto> getAllAllergy(String userEmail) {
         User user = userService.findUserByEmail(userEmail);
 
         var allergies = allergyRepository.findByUserNotContaining(user);
 
-        if(allergies.isEmpty()){
-            return null;
+        if (allergies.isEmpty()) {
+            return Collections.emptyList();
         }
 
         return allergies.stream()
@@ -54,6 +59,9 @@ public class AllergyService {
     public void deleteAAllergyForUser(AllergyDto allergyDto, String userEmail) {
         User user = userService.findUserByEmail(userEmail);
         Allergy allergy = allergyRepository.findByName(allergyDto.getAllergy_name());
+        if (allergy == null) {
+            throw new EntityNotFoundException("Allergy not found: " + allergyDto.getAllergy_name());
+        }
         user.getAllergies().remove(allergy);
         userService.updateUser(user);
     }

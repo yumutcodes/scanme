@@ -76,23 +76,26 @@ public class DataSeeder {
             if (allergyRepository.count() > 0) {
                 logger.info("Allergies already exist. Skipping...");
             } else {
-                Allergy gluten = new Allergy("Gluten", null);
-                Allergy lactose = new Allergy("Lactose", null);
-                Allergy nuts = new Allergy("Nuts", null);
-                Allergy shellfish = new Allergy("Shellfish", null);
-                Allergy soy = new Allergy("Soy", null);
+                // Match frontend allergen names exactly
+                Allergy peanuts = new Allergy("Peanuts", null);
+                Allergy treeNuts = new Allergy("Tree Nuts", null);
+                Allergy milkDairy = new Allergy("Milk (Dairy)", null);
                 Allergy eggs = new Allergy("Eggs", null);
+                Allergy soy = new Allergy("Soy", null);
+                Allergy gluten = new Allergy("Gluten", null);
                 Allergy fish = new Allergy("Fish", null);
+                Allergy shellfish = new Allergy("Shellfish", null);
                 Allergy sesame = new Allergy("Sesame", null);
                 Allergy mustard = new Allergy("Mustard", null);
+                // Additional backend allergies
                 Allergy celery = new Allergy("Celery", null);
                 Allergy sulfites = new Allergy("Sulfites", null);
                 Allergy lupin = new Allergy("Lupin", null);
                 Allergy molluscs = new Allergy("Molluscs", null);
 
                 List<Allergy> allergies = Arrays.asList(
-                        gluten, lactose, nuts, shellfish, soy, eggs,
-                        fish, sesame, mustard, celery, sulfites, lupin, molluscs);
+                        peanuts, treeNuts, milkDairy, eggs, soy, gluten,
+                        fish, shellfish, sesame, mustard, celery, sulfites, lupin, molluscs);
                 allergyRepository.saveAll(allergies);
                 logger.info("Seeded {} allergies", allergies.size());
             }
@@ -359,8 +362,8 @@ public class DataSeeder {
 
             List<Allergy> testAllergies = Arrays.asList(
                     allAllergies.stream().filter(a -> a.getName().equals("Gluten")).findFirst().orElse(null),
-                    allAllergies.stream().filter(a -> a.getName().equals("Lactose")).findFirst().orElse(null),
-                    allAllergies.stream().filter(a -> a.getName().equals("Nuts")).findFirst().orElse(null));
+                    allAllergies.stream().filter(a -> a.getName().equals("Milk (Dairy)")).findFirst().orElse(null),
+                    allAllergies.stream().filter(a -> a.getName().equals("Tree Nuts")).findFirst().orElse(null));
             testUser.setAllergies(testAllergies);
             userRepository.save(testUser);
 
@@ -377,8 +380,8 @@ public class DataSeeder {
 
             for (Allergy allergy : allergies) {
                 if (allergy.getName().equals("Gluten") ||
-                        allergy.getName().equals("Lactose") ||
-                        allergy.getName().equals("Nuts") ||
+                        allergy.getName().equals("Milk (Dairy)") ||
+                        allergy.getName().equals("Tree Nuts") ||
                         allergy.getName().equals("Eggs") ||
                         allergy.getName().equals("Soy") ||
                         allergy.getName().equals("Shellfish")) {

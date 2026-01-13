@@ -48,8 +48,8 @@ class SessionManager {
         _sessionCreatedAt = DateTime.tryParse(createdAtStr);
       }
 
-      // Check if session has expired
-      if (_sessionCreatedAt != null && isSessionExpired) {
+      // Check if session has expired (only if we have a complete session)
+      if (_sessionToken != null && _sessionCreatedAt != null && isSessionExpired) {
         await logout();
       }
     } catch (e) {
@@ -75,6 +75,9 @@ class SessionManager {
     await _storage.write(key: _keySessionToken, value: token);
     if (jwtToken != null) {
       await _storage.write(key: _keyJwtToken, value: jwtToken);
+    } else {
+      // Clear any existing JWT token if none provided
+      await _storage.delete(key: _keyJwtToken);
     }
     await _storage.write(key: _keyUserId, value: userId.toString());
     await _storage.write(key: _keySessionCreatedAt, value: now.toIso8601String());
@@ -97,16 +100,21 @@ class SessionManager {
 
   /// Check if user is logged in with a valid session
   bool get isLoggedIn => 
-      _sessionToken != null && _currentUserId != null && !isSessionExpired;
+      _sessionToken != null && _currentUserId != null && _sessionCreatedAt != null && !isSessionExpired;
   
   /// Check if user has a backend JWT (Online mode capable)
   bool get hasBackendToken => _jwtToken != null;
 
   /// Check if session has expired
+  /// Returns false if no session exists (not the same as expired)
   bool get isSessionExpired {
-    if (_sessionCreatedAt == null) return true;
+    // No session data means not logged in, not expired
+    if (_sessionCreatedAt == null || _sessionToken == null) return false;
     return DateTime.now().difference(_sessionCreatedAt!) > sessionDuration;
   }
+  
+  /// Check if session data exists (regardless of expiration)
+  bool get hasSession => _sessionToken != null && _currentUserId != null;
 
   /// Get current user ID (null if not logged in)
   int? get currentUserId => isLoggedIn ? _currentUserId : null;

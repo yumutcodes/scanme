@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:http/http.dart' as http;
 import 'package:scanme_app/services/database_helper.dart';
 import 'package:scanme_app/services/session_manager.dart';
 import 'package:scanme_app/services/hash_service.dart';
@@ -24,6 +25,18 @@ class _LoginScreenState extends State<LoginScreen> {
   final _logger = Logger();
   bool _isLoading = false;
   bool _obscurePassword = true;
+
+  Future<bool> _checkServerConnection() async {
+    try {
+      final response = await http.get(
+        Uri.parse('${ApiService.baseUrl}/token'),
+      ).timeout(const Duration(seconds: 3));
+      // Any response (even 401/405) means server is reachable
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
 
   void _login() async {
     if (_formKey.currentState!.validate()) {
@@ -59,7 +72,14 @@ class _LoginScreenState extends State<LoginScreen> {
           // Backend Mode: API is required
           _logger.i('Backend mode: Attempting online login');
 
+          // Check server connection first
+          final isConnected = await _checkServerConnection();
+          if (!isConnected) {
+            throw AuthException('Cannot connect to server. Please check your connection.');
+          }
+
           final jwtToken = await ApiService.login(email, password);
+          _logger.i('JWT token received, length: ${jwtToken.length}');
 
           // Ensure user exists locally for offline capability
           user = await DatabaseHelper.instance.getUserByEmail(email);
@@ -73,6 +93,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
           // Start Session with JWT
           await SessionManager().login(user.id!, jwtToken: jwtToken);
+          _logger.i('Session created with JWT token');
+
+          // Verify token was stored
+          final storedToken = SessionManager().jwtToken;
+          _logger.i('Stored JWT token length: ${storedToken?.length ?? 0}');
 
           // Sync Data
           await ApiService.syncUserData(user.id!);

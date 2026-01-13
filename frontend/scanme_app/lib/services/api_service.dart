@@ -18,9 +18,10 @@ class ApiService {
 
   static Future<Map<String, String>> get _headers async {
     final token = SessionManager().jwtToken;
+    _logger.d('Getting headers, JWT token present: ${token != null}, length: ${token?.length ?? 0}');
     return {
       'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token',
+      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
     };
   }
 
@@ -38,12 +39,26 @@ class ApiService {
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
-        // TokenController returns raw string
-        return response.body;
+        // TokenController returns raw string - clean up any quotes or whitespace
+        String token = response.body.trim();
+        // Remove surrounding quotes if present (some backends return "token" instead of token)
+        if (token.startsWith('"') && token.endsWith('"')) {
+          token = token.substring(1, token.length - 1);
+        }
+        _logger.i('Login successful, token received (length: ${token.length})');
+        return token;
+      } else if (response.statusCode == 401 || response.statusCode == 403) {
+        _logger.w('Auth failed: ${response.statusCode} ${response.body}');
+        throw Exception('Invalid email or password');
+      } else if (response.statusCode == 500) {
+        _logger.e('Server error during login');
+        throw Exception('Server error. User may not exist.');
       } else {
         _logger.w('Login failed: ${response.statusCode} ${response.body}');
-        throw Exception('Login failed: Invalid credentials');
+        throw Exception('Login failed: ${response.body}');
       }
+    } on SocketException {
+      throw Exception('Cannot connect to server. Is backend running?');
     } catch (e) {
       _logger.e('Login error', error: e);
       rethrow;

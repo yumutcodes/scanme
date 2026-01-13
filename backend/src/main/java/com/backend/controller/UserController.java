@@ -6,6 +6,8 @@ import com.backend.service.UserService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("users")
 public class UserController {
@@ -22,7 +24,13 @@ public class UserController {
         return ResponseEntity.ok("User created successfully!");
     }
 
-    @PatchMapping("/users/{id}")
+    @GetMapping("/check/{email}")
+    public ResponseEntity<?> checkUserExists(@PathVariable String email) {
+        boolean exists = userService.userExistsByEmail(email);
+        return ResponseEntity.ok(Map.of("exists", exists, "email", email));
+    }
+
+    @PatchMapping("/{id}")
     public ResponseEntity<?> userPasswordChange(@PathVariable long id,
             @RequestBody PasswordUpdateRequest passwordUpdateRequest) {
         userService.changePassword(id, passwordUpdateRequest.getNewPassword());

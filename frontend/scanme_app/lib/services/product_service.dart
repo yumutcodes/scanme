@@ -12,14 +12,13 @@ class BackendProductDetail {
   final String barcode;
   final String productName;
   final List<String> ingredients;
-  final List<String> userSelections; // User's allergens that match
+  // userSelections removed - allergen detection is handled entirely by frontend
   final List<DangerousIngredient> dangerousIngredients;
 
   BackendProductDetail({
     required this.barcode,
     required this.productName,
     required this.ingredients,
-    required this.userSelections,
     required this.dangerousIngredients,
   });
 
@@ -28,7 +27,6 @@ class BackendProductDetail {
       barcode: json['barcode'] ?? '',
       productName: json['productName'] ?? '',
       ingredients: List<String>.from(json['ingredients'] ?? []),
-      userSelections: List<String>.from(json['userSelections'] ?? []),
       dangerousIngredients: (json['dangerousIngredients'] as List<dynamic>?)
           ?.map((e) => DangerousIngredient.fromJson(e))
           .toList() ?? [],
@@ -41,7 +39,7 @@ class BackendProductDetail {
       barcode: barcode,
       productName: productName,
       ingredientsText: ingredients.join(', '),
-      allergens: Allergens([], userSelections.map((s) => 'en:${s.toLowerCase()}').toList()),
+      allergens: Allergens([], []),
     );
   }
 }
@@ -154,7 +152,8 @@ class ProductService {
   /// Fetch product from backend API
   static Future<ProductResult> _fetchFromBackend(String barcode) async {
     final token = SessionManager().jwtToken;
-    if (token == null) {
+    if (token == null || token.isEmpty) {
+      _logger.w('No JWT token available for backend request');
       return ProductResult(
         errorMessage: 'Not authenticated. Please login first.',
       );
@@ -162,6 +161,7 @@ class ProductService {
 
     try {
       _logger.d('Fetching product from backend: $barcode');
+      _logger.d('Using token (first 20 chars): ${token.length > 20 ? token.substring(0, 20) : token}...');
       
       final response = await http.get(
         Uri.parse('$_baseUrl/products/search?barcode=$barcode'),
@@ -185,6 +185,12 @@ class ProductService {
         return ProductResult(
           errorMessage: 'Product not found',
         );
+      } else if (response.statusCode == 403 || response.statusCode == 401) {
+        _logger.w('Auth error: ${response.statusCode} - ${response.body}');
+        // Don't automatically logout - let the user decide
+        return ProductResult(
+          errorMessage: 'Authentication error (${response.statusCode}). Please try logging out and back in.',
+        );
       } else {
         _logger.w('Backend error: ${response.statusCode} ${response.body}');
         return ProductResult(
@@ -197,11 +203,11 @@ class ProductService {
       String errorMessage;
       if (e.toString().contains('SocketException') || 
           e.toString().contains('Connection refused')) {
-        errorMessage = 'Cannot connect to server. Please check your connection.';
+        errorMessage = 'Cannot connect to server. Check if backend is running.';
       } else if (e.toString().contains('TimeoutException')) {
-        errorMessage = 'Request timed out. Please try again.';
+        errorMessage = 'Request timed out. Server slow or unreachable.';
       } else {
-        errorMessage = 'Failed to fetch product. Please try again.';
+        errorMessage = 'Error: ${e.toString()}';
       }
       
       return ProductResult(errorMessage: errorMessage);
@@ -327,7 +333,7 @@ class ProductService {
     // Helper map to match user selections to potential ingredient keywords and tags
     final Map<String, List<String>> lexicon = {
       'Peanuts': ['peanut', 'arachis', 'en:peanuts'],
-      'Tree Nuts': ['nut', 'almond', 'cashew', 'walnut', 'hazelnut', 'pecan', 'en:nuts', 'en:hazelnuts'],
+      'Tree Nuts': ['almond', 'cashew', 'walnut', 'hazelnut', 'pecan', 'pistachio', 'macadamia', 'chestnut', 'brazil nut', 'en:nuts', 'en:hazelnuts', 'en:almonds', 'en:cashews', 'en:walnuts'],
       'Milk (Dairy)': ['milk', 'lactose', 'cheese', 'cream', 'whey', 'butter', 'yogurt', 'en:milk'],
       'Eggs': ['egg', 'albumin', 'en:eggs'],
       'Soy': ['soy', 'soya', 'tofu', 'lecithin', 'en:soybeans'],
