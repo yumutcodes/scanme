@@ -138,6 +138,9 @@ class _ProductResultScreenState extends State<ProductResultScreen> {
     }
 
     if (_productResult == null || _productResult!.isError) {
+      if (_productResult?.errorMessage == 'Product not found') {
+        return _buildNotFoundState();
+      }
       return _buildErrorState();
     }
 

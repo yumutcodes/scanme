@@ -254,7 +254,9 @@ public class DataSeeder {
                     { "Processed Cheese",
                             "Cheese,Milk,Butter,Salt,Emulsifiers,Sodium Citrate,Artificial Colors,Sodium Benzoate" },
                     { "Ulker Chocolate Wafer",
-                            "Sugar,Wheat Flour,Vegetable Oil,Hazelnut Puree,Whole Milk Powder,Cocoa Butter,Cocoa Mass,Starch,Whey Powder,Emulsifiers,Salt,Cocoa Powder,Skimmed Milk Powder,Egg White Powder,Flavourings,Raising Agents" }
+                            "Sugar,Wheat Flour,Vegetable Oil,Hazelnut Puree,Whole Milk Powder,Cocoa Butter,Cocoa Mass,Starch,Whey Powder,Emulsifiers,Salt,Cocoa Powder,Skimmed Milk Powder,Egg White Powder,Flavourings,Raising Agents" },
+                    { "Nutella Hazelnut Spread",
+                            "Sugar,Palm Oil,Hazelnuts,Skimmed Milk Powder,Cocoa,Soy Lecithin,Vanillin" }
             };
 
             for (String[] template : productTemplates) {
@@ -263,10 +265,13 @@ public class DataSeeder {
                 String barcode;
                 String brand;
 
-                // Special case for Ulker Chocolate Wafer
+                // Special case for Ulker Chocolate Wafer and Nutella
                 if (template[0].equals("Ulker Chocolate Wafer")) {
                     barcode = "8690504020509";
                     brand = "Ulker";
+                } else if (template[0].equals("Nutella Hazelnut Spread")) {
+                    barcode = "3017620422003";
+                    brand = "Ferrero";
                 } else {
                     barcode = "869" + String.format("%09d", faker.number().numberBetween(1, 999999999));
                     brand = faker.company().name();

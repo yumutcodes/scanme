@@ -1,26 +1,101 @@
+import 'dart:convert';
+import 'dart:io';
+import 'package:http/http.dart' as http;
 import 'package:openfoodfacts/openfoodfacts.dart';
 import 'package:scanme_app/exceptions/app_exceptions.dart';
 import 'package:logger/logger.dart';
 import 'package:scanme_app/config/app_config.dart';
+import 'package:scanme_app/services/session_manager.dart';
+
+/// DTO for backend product response
+class BackendProductDetail {
+  final String barcode;
+  final String productName;
+  final List<String> ingredients;
+  final List<String> userSelections; // User's allergens that match
+  final List<DangerousIngredient> dangerousIngredients;
+
+  BackendProductDetail({
+    required this.barcode,
+    required this.productName,
+    required this.ingredients,
+    required this.userSelections,
+    required this.dangerousIngredients,
+  });
+
+  factory BackendProductDetail.fromJson(Map<String, dynamic> json) {
+    return BackendProductDetail(
+      barcode: json['barcode'] ?? '',
+      productName: json['productName'] ?? '',
+      ingredients: List<String>.from(json['ingredients'] ?? []),
+      userSelections: List<String>.from(json['userSelections'] ?? []),
+      dangerousIngredients: (json['dangerousIngredients'] as List<dynamic>?)
+          ?.map((e) => DangerousIngredient.fromJson(e))
+          .toList() ?? [],
+    );
+  }
+
+  /// Convert to OpenFoodFacts Product for compatibility
+  Product toProduct() {
+    return Product(
+      barcode: barcode,
+      productName: productName,
+      ingredientsText: ingredients.join(', '),
+      allergens: Allergens([], userSelections.map((s) => 'en:${s.toLowerCase()}').toList()),
+    );
+  }
+}
+
+class DangerousIngredient {
+  final String name;
+  final int dangerLevel;
+
+  DangerousIngredient({required this.name, required this.dangerLevel});
+
+  factory DangerousIngredient.fromJson(Map<String, dynamic> json) {
+    return DangerousIngredient(
+      name: json['name'] ?? '',
+      dangerLevel: json['dangerLevel'] ?? 0,
+    );
+  }
+}
 
 /// Result wrapper for product lookups
 class ProductResult {
   final Product? product;
+  final BackendProductDetail? backendProduct;
   final bool isFromMock;
+  final bool isFromBackend;
   final String? errorMessage;
 
   ProductResult({
     this.product,
+    this.backendProduct,
     this.isFromMock = false,
+    this.isFromBackend = false,
     this.errorMessage,
   });
 
-  bool get isSuccess => product != null;
+  bool get isSuccess => product != null || backendProduct != null;
   bool get isError => errorMessage != null;
+  
+  /// Get product name from either source
+  String? get productName => backendProduct?.productName ?? product?.productName;
+  
+  /// Get ingredients text from either source
+  String? get ingredientsText => backendProduct?.ingredients.join(', ') ?? product?.ingredientsText;
 }
 
 class ProductService {
   static final Logger _logger = Logger();
+
+  // Backend API URL
+  static String get _baseUrl {
+    if (Platform.isAndroid) {
+      return 'http://10.0.2.2:8080';
+    }
+    return 'http://localhost:8080';
+  }
   
   // Mock Database for fallback
   static final Map<String, Product> _mockDb = {
@@ -76,30 +151,66 @@ class ProductService {
     ),
   };
 
-  /// Fetch product with comprehensive error handling.
-  /// Returns a ProductResult which contains either the product or error info.
-  static Future<ProductResult> getProductWithResult(String barcode) async {
-    // Validate barcode format
-    if (barcode.isEmpty || !_isValidBarcode(barcode)) {
-      _logger.w('Invalid barcode format: $barcode');
+  /// Fetch product from backend API
+  static Future<ProductResult> _fetchFromBackend(String barcode) async {
+    final token = SessionManager().jwtToken;
+    if (token == null) {
       return ProductResult(
-        errorMessage: 'Invalid barcode format',
+        errorMessage: 'Not authenticated. Please login first.',
       );
     }
 
-    // STRICT MODE: Check Environment Config first
-    if (AppConfig.useMockData) {
-      _logger.i('Environment configured for MOCK DATA. Skipping API call.');
-      final mockProduct = _mockDb[barcode];
-      if (mockProduct != null) {
-        return ProductResult(product: mockProduct, isFromMock: true);
+    try {
+      _logger.d('Fetching product from backend: $barcode');
+      
+      final response = await http.get(
+        Uri.parse('$_baseUrl/products/search?barcode=$barcode'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        final backendProduct = BackendProductDetail.fromJson(json);
+        _logger.i('Product found from backend: ${backendProduct.productName}');
+        return ProductResult(
+          backendProduct: backendProduct,
+          product: backendProduct.toProduct(),
+          isFromBackend: true,
+        );
+      } else if (response.statusCode == 404) {
+        _logger.w('Product not found in backend: $barcode');
+        return ProductResult(
+          errorMessage: 'Product not found',
+        );
+      } else {
+        _logger.w('Backend error: ${response.statusCode} ${response.body}');
+        return ProductResult(
+          errorMessage: 'Server error: ${response.statusCode}',
+        );
       }
-      return ProductResult(
-        errorMessage: 'Product not found in Mock Database (Mock Mode)',
-      );
+    } catch (e, stackTrace) {
+      _logger.e('Backend API error', error: e, stackTrace: stackTrace);
+      
+      String errorMessage;
+      if (e.toString().contains('SocketException') || 
+          e.toString().contains('Connection refused')) {
+        errorMessage = 'Cannot connect to server. Please check your connection.';
+      } else if (e.toString().contains('TimeoutException')) {
+        errorMessage = 'Request timed out. Please try again.';
+      } else {
+        errorMessage = 'Failed to fetch product. Please try again.';
+      }
+      
+      return ProductResult(errorMessage: errorMessage);
     }
+  }
 
-    final ProductQueryConfiguration configuration = ProductQueryConfiguration(
+  /// Fetch product from OpenFoodFacts API
+  static Future<ProductResult> _fetchFromOpenFoodFacts(String barcode) async {
+     final ProductQueryConfiguration configuration = ProductQueryConfiguration(
       barcode,
       language: OpenFoodFactsLanguage.ENGLISH,
       fields: [
@@ -114,12 +225,12 @@ class ProductService {
     );
 
     try {
-      _logger.d('Fetching product from API: $barcode');
+      _logger.d('Fetching product from OpenFoodFacts: $barcode');
       
       final ProductResultV3 result = await OpenFoodAPIClient.getProductV3(configuration);
       
       if (result.status == ProductResultV3.statusSuccess && result.product != null) {
-        _logger.i('Product found from API: ${result.product?.productName}');
+        _logger.i('Product found from OpenFoodFacts: ${result.product?.productName}');
         return ProductResult(product: result.product);
       } else {
         _logger.w('Product not found for barcode: $barcode');
@@ -128,9 +239,8 @@ class ProductService {
         );
       }
     } catch (e, stackTrace) {
-      _logger.e('API error fetching product', error: e, stackTrace: stackTrace);
+      _logger.e('OpenFoodFacts API error', error: e, stackTrace: stackTrace);
            
-      // Determine error type
       String errorMessage;
       if (e.toString().contains('SocketException') || 
           e.toString().contains('Connection refused')) {
@@ -142,6 +252,44 @@ class ProductService {
       }
       
       return ProductResult(errorMessage: errorMessage);
+    }
+  }
+
+  /// Fetch product from Mock Data
+  static Future<ProductResult> _fetchFromMock(String barcode) async {
+    _logger.i('Fetching product from MOCK DB: $barcode');
+    final mockProduct = _mockDb[barcode];
+    if (mockProduct != null) {
+      return ProductResult(product: mockProduct, isFromMock: true);
+    }
+    return ProductResult(
+      errorMessage: 'Product not found in Mock Database (Mock Mode)',
+    );
+  }
+
+  /// Fetch product with comprehensive error handling.
+  /// Returns a ProductResult which contains either the product or error info.
+  static Future<ProductResult> getProductWithResult(String barcode) async {
+    // Validate barcode format
+    if (barcode.isEmpty || !_isValidBarcode(barcode)) {
+      _logger.w('Invalid barcode format: $barcode');
+      return ProductResult(
+        errorMessage: 'Invalid barcode format',
+      );
+    }
+
+    // 1. Check Mock/Offline Mode Flag
+    if (AppConfig.useMockData) {
+      return await _fetchFromMock(barcode);
+    }
+
+    // 2. Select API Source
+    switch (AppConfig.scanningSource) {
+      case ScanningSource.backend:
+        return await _fetchFromBackend(barcode);
+        
+      case ScanningSource.openFoodFacts:
+        return await _fetchFromOpenFoodFacts(barcode);
     }
   }
 
