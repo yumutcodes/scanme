@@ -394,7 +394,7 @@ public class DataSeeder {
                         allergyUsers.add(randomUser);
                     }
 
-                    allergy.setUser(allergyUsers);
+                    allergy.setUsers(allergyUsers);
                     allergyRepository.save(allergy);
                 }
             }

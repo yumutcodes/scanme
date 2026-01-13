@@ -17,7 +17,7 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
-    return await openDatabase(path, version: 3, onCreate: _createDB, onUpgrade: _onUpgrade);
+    return await openDatabase(path, version: 4, onCreate: _createDB, onUpgrade: _onUpgrade);
   }
 
   Future _createDB(Database db, int version) async {
@@ -26,11 +26,12 @@ class DatabaseHelper {
     const boolType = 'INTEGER NOT NULL';
     const integerType = 'INTEGER NOT NULL';
 
-    // History Table
+    // History Table with backendId for syncing with backend
     await db.execute('''
 CREATE TABLE history ( 
   id $idType, 
   userId $integerType,
+  backendId INTEGER,
   barcode $textType,
   productName $textType,
   isSafe $boolType,
@@ -71,12 +72,18 @@ CREATE TABLE user_allergens (
 CREATE TABLE history ( 
   id $idType, 
   userId $integerType,
+  backendId INTEGER,
   barcode $textType,
   productName $textType,
   isSafe $boolType,
   scanDate $textType
   )
 ''');
+    }
+    
+    if (oldVersion < 4) {
+      // Add backendId column for existing databases
+      await db.execute('ALTER TABLE history ADD COLUMN backendId INTEGER');
     }
     
     // Ensure Users and Allergens tables exist (for v1->v2->v3 path)
@@ -211,6 +218,17 @@ CREATE TABLE user_allergens (
     );
   }
 
+  /// Update the backend ID for a local history entry after syncing with backend
+  Future<int> updateBackendId(int localId, int backendId) async {
+    final db = await instance.database;
+    return await db.update(
+      'history',
+      {'backendId': backendId},
+      where: 'id = ?',
+      whereArgs: [localId],
+    );
+  }
+
   Future close() async {
     final db = await instance.database;
     db.close();
@@ -218,7 +236,8 @@ CREATE TABLE user_allergens (
 }
 
 class ScanItem {
-  final int? id;
+  final int? id;           // Local SQLite ID
+  final int? backendId;    // Backend ID for syncing
   final String barcode;
   final String productName;
   final bool isSafe;
@@ -226,6 +245,7 @@ class ScanItem {
 
   ScanItem({
     this.id,
+    this.backendId,
     required this.barcode,
     required this.productName,
     required this.isSafe,
@@ -234,6 +254,7 @@ class ScanItem {
 
   ScanItem copyWith({
     int? id,
+    int? backendId,
     String? barcode,
     String? productName,
     bool? isSafe,
@@ -241,6 +262,7 @@ class ScanItem {
   }) =>
       ScanItem(
         id: id ?? this.id,
+        backendId: backendId ?? this.backendId,
         barcode: barcode ?? this.barcode,
         productName: productName ?? this.productName,
         isSafe: isSafe ?? this.isSafe,
@@ -260,6 +282,7 @@ class ScanItem {
 
     return ScanItem(
       id: json['id'] as int?,
+      backendId: json['backendId'] as int?,
       barcode: json['barcode'] as String,
       productName: json['productName'] as String,
       isSafe: safe,
@@ -269,6 +292,7 @@ class ScanItem {
 
   Map<String, Object?> toJson() => {
         'id': id,
+        'backendId': backendId,
         'barcode': barcode,
         'productName': productName,
         'isSafe': isSafe ? 1 : 0,

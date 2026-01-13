@@ -36,4 +36,13 @@ public class HistoryController {
         List<HistoryDto> history = historyService.getUserHistory(email);
         return ResponseEntity.ok(history);
     }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteHistory(
+            @PathVariable Long id,
+            @RequestHeader("Authorization") String token) {
+        String email = jwtService.extractMail(token);
+        historyService.deleteHistory(id, email);
+        return ResponseEntity.ok().build();
+    }
 }

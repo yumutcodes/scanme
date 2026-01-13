@@ -48,4 +48,17 @@ public class HistoryService {
                 .map(h -> new HistoryDto(h.getId(), h.getBarcode(), h.getProductName(), h.getIsSafe(), h.getScanDate()))
                 .collect(Collectors.toList());
     }
+
+    public void deleteHistory(Long historyId, String userEmail) {
+        User user = userService.findUserByEmail(userEmail);
+        History history = historyRepository.findById(historyId)
+                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("History not found: " + historyId));
+
+        // Verify ownership
+        if (!history.getUser().getId().equals(user.getId())) {
+            throw new SecurityException("User does not own this history entry");
+        }
+
+        historyRepository.delete(history);
+    }
 }

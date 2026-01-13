@@ -97,18 +97,20 @@ class _ProductResultScreenState extends State<ProductResultScreen> {
         scanDate: DateTime.now(),
       );
 
-      // Always save to local SQLite
+      // If logged in to backend, save to backend first and get the backend ID
+      int? backendId;
+      if (SessionManager().hasBackendToken) {
+        backendId = await ApiService.saveHistory(item);
+      }
+
+      // Save to local SQLite with backend ID (if available)
       final userId = SessionManager().currentUserId;
       if (userId != null) {
-        await DatabaseHelper.instance.create(item, userId);
+        final itemWithBackendId = item.copyWith(backendId: backendId);
+        await DatabaseHelper.instance.create(itemWithBackendId, userId);
       }
       
-      // If logged in to backend, sync scan immediately
-      if (SessionManager().hasBackendToken) {
-        await ApiService.saveHistory(item);
-      }
-      
-      _logger.i('Saved scan to history: $name');
+      _logger.i('Saved scan to history: $name${backendId != null ? ' (backendId: $backendId)' : ''}');
     } catch (e) {
       _logger.e('Failed to save to history', error: e);
     }

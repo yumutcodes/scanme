@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:scanme_app/services/database_helper.dart';
 import 'package:scanme_app/services/session_manager.dart';
+import 'package:scanme_app/services/api_service.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:scanme_app/widgets/empty_state_widget.dart';
 
@@ -85,8 +86,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 return Dismissible(
                   key: Key(item.id.toString()),
                   direction: DismissDirection.endToStart,
-                  onDismissed: (_) {
-                    DatabaseHelper.instance.delete(item.id!);
+                  onDismissed: (_) async {
+                    // Delete from local database
+                    await DatabaseHelper.instance.delete(item.id!);
+                    // Also delete from backend if logged in with backend and has backend ID
+                    if (SessionManager().hasBackendToken && item.backendId != null) {
+                      await ApiService.deleteHistory(item.backendId!);
+                    }
                   },
                   background: Container(
                     alignment: Alignment.centerRight,

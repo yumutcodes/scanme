@@ -44,10 +44,9 @@ public class AllergyService {
 
     public List<AllergyDto> getAllAllergy(String userEmail) {
         User user = userService.findUserByEmail(userEmail);
+        List<Allergy> allergies = user.getAllergies(); // Get user's ACTUAL allergies
 
-        var allergies = allergyRepository.findByUserNotContaining(user);
-
-        if (allergies.isEmpty()) {
+        if (allergies == null || allergies.isEmpty()) {
             return Collections.emptyList();
         }
 

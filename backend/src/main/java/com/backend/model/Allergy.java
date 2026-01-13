@@ -13,15 +13,15 @@ public class Allergy extends BaseEntity {
     private Long id;
     private String name;
 
-    @ManyToMany
-    private List<User> user;
+    @ManyToMany(mappedBy = "allergies")
+    private List<User> users;
 
     public Allergy() {
     }
 
-    public Allergy(String name, List<User> user) {
+    public Allergy(String name, List<User> users) {
         this.name = name;
-        this.user = user;
+        this.users = users;
     }
 
     public Long getId() {
@@ -40,11 +40,11 @@ public class Allergy extends BaseEntity {
         this.name = name;
     }
 
-    public List<User> getUser() {
-        return user;
+    public List<User> getUsers() {
+        return users;
     }
 
-    public void setUser(List<User> user) {
-        this.user = user;
+    public void setUsers(List<User> users) {
+        this.users = users;
     }
 }
