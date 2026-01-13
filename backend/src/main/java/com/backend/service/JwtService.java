@@ -44,6 +44,11 @@ public class JwtService {
     }
 
     public String extractMail(String token) {
+        // Strip "Bearer " prefix if present
+        if (token != null && token.startsWith("Bearer ")) {
+            token = token.substring(7);
+        }
+
         Claims claims = Jwts.parser()
                 .verifyWith(getSignKey())
                 .build()
